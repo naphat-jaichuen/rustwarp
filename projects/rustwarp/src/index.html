@@ -9,38 +9,55 @@
   </head>
 
   <body>
-    <main class="container">
-      <h1>Dynamic Table</h1>
-      <p>Type text and press Enter to add rows to the table</p>
+    <!-- Floating Add View Button -->
+    <div class="floating-add-btn" id="floating-add-btn" title="Add new view">
+      <span class="plus-icon">+</span>
+    </div>
+    
+    <!-- View Container -->
+    <div class="view-container" id="view-container">
+      <!-- View 1 - Default Table View -->
+      <div class="view-panel active" id="view-1" data-view-id="1">
+        <div class="view-header">
+          <h2>Table View 1</h2>
+          <button class="close-view-btn" onclick="closeView(1)" title="Close view">×</button>
+        </div>
+        
+        <div class="view-content">
+          <p>Type text and press Enter to add rows to the table</p>
+          
+          <div class="input-section">
+            <input 
+              id="text-input-1" 
+              class="text-input"
+              type="text" 
+              placeholder="Enter text and press Enter..." 
+              autocomplete="off"
+              data-view-id="1"
+            />
+          </div>
 
-      <div class="input-section">
-        <input 
-          id="text-input" 
-          type="text" 
-          placeholder="Enter text and press Enter..." 
-          autocomplete="off"
-        />
-      </div>
+          <div class="table-section">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Text</th>
+                  <th>Added At</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="table-body-1" class="table-body">
+                <!-- Rows will be added here dynamically -->
+              </tbody>
+            </table>
+          </div>
 
-      <div class="table-section">
-        <table id="data-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Text</th>
-              <th>Added At</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="table-body">
-            <!-- Rows will be added here dynamically -->
-          </tbody>
-        </table>
+          <div class="stats">
+            <p>Total rows: <span id="row-count-1" class="row-count">0</span></p>
+          </div>
+        </div>
       </div>
-
-      <div class="stats">
-        <p>Total rows: <span id="row-count">0</span></p>
-      </div>
-    </main>
+    </div>
   </body>
 </html>
