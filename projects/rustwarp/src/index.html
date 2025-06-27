@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Table App</title>
+    <script type="module" src="/main.js" defer></script>
+  </head>
+
+  <body>
+    <main class="container">
+      <h1>Dynamic Table</h1>
+      <p>Type text and press Enter to add rows to the table</p>
+
+      <div class="input-section">
+        <input 
+          id="text-input" 
+          type="text" 
+          placeholder="Enter text and press Enter..." 
+          autocomplete="off"
+        />
+      </div>
+
+      <div class="table-section">
+        <table id="data-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Text</th>
+              <th>Added At</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="table-body">
+            <!-- Rows will be added here dynamically -->
+          </tbody>
+        </table>
+      </div>
+
+      <div class="stats">
+        <p>Total rows: <span id="row-count">0</span></p>
+      </div>
+    </main>
+  </body>
+</html>
