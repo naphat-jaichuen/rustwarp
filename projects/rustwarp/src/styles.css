@@ -19,6 +19,8 @@
   display: flex;
   height: 100vh;
   overflow: hidden;
+  min-width: 720px; /* Minimum app width: 400px * 2 views */
+  overflow-x: auto; /* Allow horizontal scrolling if needed */
 }
 
 .view-panel {
@@ -27,7 +29,8 @@
   flex-direction: column;
   border-right: 1px solid #ddd;
   position: relative;
-  min-width: 0; /* Allows flex items to shrink below content size */
+  min-width: 360px; /* Ensures each view is at least 380px wide */
+  overflow-x: auto; /* Allow horizontal scrolling within view if needed */
 }
 
 .view-panel:last-child {

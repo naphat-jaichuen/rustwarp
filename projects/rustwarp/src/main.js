@@ -90,6 +90,91 @@ function handleEnterKey(event) {
   }
 }
 
+// Function to check if horizontal scrollbar is present
+function hasHorizontalScrollbar() {
+  const viewContainer = document.querySelector('#view-container');
+  return viewContainer.scrollWidth > viewContainer.clientWidth;
+}
+
+// Function to calculate required width to show all views without scrolling
+function calculateRequiredWidth(viewCount) {
+  const minViewWidth = 360; // Minimum width per view
+  const borderPadding = 40; // Extra space for borders, padding, etc.
+  return (viewCount * minViewWidth) + borderPadding;
+}
+
+// Function to resize window based on view count and content
+async function resizeWindowForViews(viewCount) {
+  try {
+    if (window.__TAURI__) {
+      const { getCurrentWindow } = window.__TAURI__.window;
+      const appWindow = getCurrentWindow();
+      
+      // Calculate required width to show all content without scrolling
+      const requiredWidth = calculateRequiredWidth(viewCount);
+      
+      // Get current window size
+      const currentSize = await appWindow.innerSize();
+      
+      // Check if we need to expand the window
+      let newWidth = Math.max(800, requiredWidth); // Never go below 800px minimum
+      
+      // Only resize if the new width is different from current width
+      if (Math.abs(currentSize.width - newWidth) > 10) { // 10px tolerance
+        await appWindow.setSize({
+          width: newWidth,
+          height: currentSize.height
+        });
+        
+        // Wait a bit for the resize to take effect, then check if scrollbar still exists
+        setTimeout(async () => {
+          if (hasHorizontalScrollbar()) {
+            // If scrollbar still exists, add more width
+            const extraWidth = 100;
+            newWidth += extraWidth;
+            await appWindow.setSize({
+              width: newWidth,
+              height: currentSize.height
+            });
+          }
+        }, 100);
+      }
+    }
+  } catch (error) {
+    console.log('Window resize not available (likely in development mode)');
+  }
+}
+
+// Function to monitor and auto-expand window when scrollbar appears
+function setupScrollbarMonitoring() {
+  const viewContainer = document.querySelector('#view-container');
+  let resizeTimeout;
+  
+  // Monitor for content changes that might cause scrollbars
+  const resizeObserver = new ResizeObserver(() => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      if (hasHorizontalScrollbar()) {
+        const currentViews = viewContainer.children.length;
+        resizeWindowForViews(currentViews);
+      }
+    }, 150); // Debounce to avoid too many resize calls
+  });
+  
+  resizeObserver.observe(viewContainer);
+  
+  // Also monitor window resize events
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      if (hasHorizontalScrollbar()) {
+        const currentViews = viewContainer.children.length;
+        resizeWindowForViews(currentViews);
+      }
+    }, 150);
+  });
+}
+
 // Function to create a new view
 function createNewView() {
   const viewContainer = document.querySelector('#view-container');
@@ -157,6 +242,10 @@ function createNewView() {
   
   // Focus on new view's input
   viewData[newViewId].textInputEl.focus();
+  
+  // Resize window for new view count
+  const newViewCount = viewContainer.children.length;
+  resizeWindowForViews(newViewCount);
 }
 
 // Function to close a view
@@ -180,6 +269,10 @@ function closeView(viewId) {
     
     // Update layout classes if needed
     updateViewLayout();
+    
+    // Resize window for new view count
+    const newViewCount = viewContainer.children.length;
+    resizeWindowForViews(newViewCount);
   }
 }
 
@@ -230,6 +323,9 @@ window.addEventListener("DOMContentLoaded", () => {
   
   // Set initial layout
   updateViewLayout();
+  
+  // Setup scrollbar monitoring for auto-expansion
+  setupScrollbarMonitoring();
 });
 
 // Make functions global so they can be called from HTML
