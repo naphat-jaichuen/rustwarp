@@ -362,6 +362,16 @@ function closeView(viewId) {
     // Update layout classes if needed
     updateViewLayout();
     
+    // Focus on remaining view's input if it exists
+    const remainingViews = viewContainer.querySelectorAll('.view-panel');
+    if (remainingViews.length === 1) {
+      const remainingViewId = remainingViews[0].dataset.viewId;
+      const remainingViewData = viewData[remainingViewId];
+      if (remainingViewData && remainingViewData.textInputEl) {
+        remainingViewData.textInputEl.focus();
+      }
+    }
+    
     // Resize window for new view count
     const newViewCount = viewContainer.querySelectorAll('.view-panel').length;
     resizeWindowForViews(newViewCount);
