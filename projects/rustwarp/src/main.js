@@ -189,6 +189,13 @@ function createNewView() {
   viewCounter++;
   const newViewId = viewCounter;
   
+  // Add divider before the new view if this is the second view
+  if (currentViews === 1) {
+    const dividerHtml = `<div class="view-divider" id="view-divider"></div>`;
+    viewContainer.insertAdjacentHTML('beforeend', dividerHtml);
+    setupDividerResizing();
+  }
+  
   // Create new view HTML
   const newViewHtml = `
     <div class="view-panel" id="view-${newViewId}" data-view-id="${newViewId}">
@@ -244,17 +251,88 @@ function createNewView() {
   viewData[newViewId].textInputEl.focus();
   
   // Resize window for new view count
-  const newViewCount = viewContainer.children.length;
+  const newViewCount = viewContainer.children.filter(child => child.classList.contains('view-panel')).length;
   resizeWindowForViews(newViewCount);
+}
+
+// Function to setup divider resizing
+function setupDividerResizing() {
+  const divider = document.querySelector('#view-divider');
+  const viewContainer = document.querySelector('#view-container');
+  let isResizing = false;
+  let startX = 0;
+  let startLeftWidth = 0;
+  let startRightWidth = 0;
+  
+  divider.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    startX = e.clientX;
+    
+    const views = viewContainer.querySelectorAll('.view-panel');
+    const leftView = views[0];
+    const rightView = views[1];
+    
+    startLeftWidth = leftView.offsetWidth;
+    startRightWidth = rightView.offsetWidth;
+    
+    // Prevent text selection during resize
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    
+    e.preventDefault();
+  });
+  
+  document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+    
+    const deltaX = e.clientX - startX;
+    const views = viewContainer.querySelectorAll('.view-panel');
+    const leftView = views[0];
+    const rightView = views[1];
+    
+    const minWidth = 380; // Minimum width for each view
+    const containerWidth = viewContainer.offsetWidth - 8; // Subtract divider width
+    
+    let newLeftWidth = startLeftWidth + deltaX;
+    let newRightWidth = startRightWidth - deltaX;
+    
+    // Enforce minimum widths
+    if (newLeftWidth < minWidth) {
+      newLeftWidth = minWidth;
+      newRightWidth = containerWidth - newLeftWidth;
+    }
+    
+    if (newRightWidth < minWidth) {
+      newRightWidth = minWidth;
+      newLeftWidth = containerWidth - newRightWidth;
+    }
+    
+    // Apply new widths using flex-basis
+    leftView.style.flexBasis = `${newLeftWidth}px`;
+    leftView.style.flexGrow = '0';
+    leftView.style.flexShrink = '0';
+    
+    rightView.style.flexBasis = `${newRightWidth}px`;
+    rightView.style.flexGrow = '0';
+    rightView.style.flexShrink = '0';
+  });
+  
+  document.addEventListener('mouseup', () => {
+    if (isResizing) {
+      isResizing = false;
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    }
+  });
 }
 
 // Function to close a view
 function closeView(viewId) {
   const viewContainer = document.querySelector('#view-container');
-  const currentViews = viewContainer.children.length;
+  const viewPanels = viewContainer.querySelectorAll('.view-panel');
   
   // Don't allow closing if it's the only view
-  if (currentViews <= 1) {
+  if (viewPanels.length <= 1) {
     alert('Cannot close the last remaining view.');
     return;
   }
@@ -264,6 +342,20 @@ function closeView(viewId) {
     // Remove from DOM
     viewElement.remove();
     
+    // Remove divider if going back to single view
+    const divider = document.querySelector('#view-divider');
+    if (divider && viewPanels.length === 2) { // 2 because we haven't updated the count yet
+      divider.remove();
+      
+      // Reset remaining view's flex properties
+      const remainingView = viewContainer.querySelector('.view-panel');
+      if (remainingView) {
+        remainingView.style.flexBasis = '';
+        remainingView.style.flexGrow = '1';
+        remainingView.style.flexShrink = '1';
+      }
+    }
+    
     // Clean up view data
     delete viewData[viewId];
     
@@ -271,7 +363,7 @@ function closeView(viewId) {
     updateViewLayout();
     
     // Resize window for new view count
-    const newViewCount = viewContainer.children.length;
+    const newViewCount = viewContainer.querySelectorAll('.view-panel').length;
     resizeWindowForViews(newViewCount);
   }
 }

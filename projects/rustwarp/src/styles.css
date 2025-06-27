@@ -41,6 +41,44 @@
   border-right: none;
 }
 
+/* Resizable Divider */
+.view-divider {
+  width: 8px;
+  background-color: #e0e0e0;
+  cursor: col-resize;
+  position: relative;
+  flex-shrink: 0;
+  border-left: 1px solid #ddd;
+  border-right: 1px solid #ddd;
+  transition: background-color 0.2s ease;
+}
+
+.view-divider:hover {
+  background-color: #646cff;
+}
+
+.view-divider:active {
+  background-color: #5a67d8;
+}
+
+.view-divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 3px;
+  height: 40px;
+  background-color: #999;
+  border-radius: 2px;
+  opacity: 0.6;
+}
+
+.view-divider:hover::before {
+  background-color: white;
+  opacity: 1;
+}
+
 .view-header {
   background-color: #f8f9fa;
   padding: 1rem 1.5rem;
