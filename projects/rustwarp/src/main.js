@@ -750,6 +750,226 @@ function setupPopupEventListeners(viewId) {
   });
 }
 
+// Tauri File Drop functionality
+
+// Function to setup Tauri onDragDropEvent
+function onDragDropEvent(event) {
+  console.log('DragDrop event detected:', event);
+  
+  const files = event.payload.paths || event.payload;
+  if (files && files.length > 0) {
+    // For now, add to the first view (view-1)
+    // In the future, we could detect which view was targeted
+    const viewId = 1;
+    
+    files.forEach(async (filePath) => {
+      const fileName = filePath.split('/').pop() || filePath.split('\\').pop();
+      const message = `📁 Dropped file: ${fileName}`;
+      addTerminalEntry(message, viewId);
+      
+      // Try to read file if it's a text file
+      if (fileName.endsWith('.txt') || fileName.endsWith('.md') || fileName.endsWith('.js') || fileName.endsWith('.json') || fileName.endsWith('.html') || fileName.endsWith('.css')) {
+        await readTauriFileContent(filePath, viewId);
+      }
+    });
+  }
+}
+
+// Function to setup Tauri file drop listener using getCurrentWebview().onDragDropEvent()
+async function setupTauriFileDropListener() {
+  if (!window.__TAURI__) {
+    console.log('Tauri not available, file drop disabled');
+    return;
+  }
+  
+  console.log('Setting up Tauri file drop listener with getCurrentWebview()...');
+  
+  try {
+    // Import Tauri webview
+    const { getCurrentWebview } = window.__TAURI__.webview;
+    
+    // Setup drag drop event listener
+    const unlisten = await getCurrentWebview().onDragDropEvent((event) => {
+      console.log('getCurrentWebview onDragDropEvent triggered:', event);
+      
+      if (event.payload.type === 'drop') {
+        console.log('File drop detected via getCurrentWebview:', event.payload);
+        
+        const files = event.payload.paths;
+        if (files && files.length > 0) {
+          // For now, add to the first view (view-1)
+          // In the future, we could detect which view was targeted
+          const viewId = 1;
+          
+          files.forEach(async (filePath) => {
+            const fileName = filePath.split('/').pop() || filePath.split('\\').pop();
+            const message = `📁 Dropped file: ${fileName}`;
+            addTerminalEntry(message, viewId);
+            
+            // Try to read file if it's a text file
+            if (fileName.endsWith('.txt') || fileName.endsWith('.md') || fileName.endsWith('.js') || fileName.endsWith('.json') || fileName.endsWith('.html') || fileName.endsWith('.css')) {
+              await readTauriFileContent(filePath, viewId);
+            }
+          });
+        }
+      } else if (event.payload.type === 'hover') {
+        console.log('File drop hover detected via getCurrentWebview');
+        // Add visual feedback to all views
+        const viewPanels = document.querySelectorAll('.view-panel');
+        viewPanels.forEach(panel => panel.classList.add('drag-over'));
+      } else if (event.payload.type === 'cancelled') {
+        console.log('File drop cancelled via getCurrentWebview');
+        // Remove visual feedback from all views
+        const viewPanels = document.querySelectorAll('.view-panel');
+        viewPanels.forEach(panel => panel.classList.remove('drag-over'));
+      }
+    });
+    
+    // Store the unlisten function for cleanup if needed
+    window.dragDropUnlisten = unlisten;
+    
+    console.log('Tauri getCurrentWebview file drop listener setup complete');
+  } catch (error) {
+    console.error('Failed to setup getCurrentWebview drag drop listener:', error);
+    
+    // Fallback to the previous method
+    console.log('Falling back to event listener approach...');
+    const { listen } = window.__TAURI__.event;
+    
+    // Listen for file drop events using onDragDropEvent
+    listen('tauri://file-drop', onDragDropEvent);
+
+    // Listen for file drop hover events (for visual feedback)
+    listen('tauri://file-drop-hover', (event) => {
+      console.log('File drop hover detected');
+      // Add visual feedback to all views
+      const viewPanels = document.querySelectorAll('.view-panel');
+      viewPanels.forEach(panel => panel.classList.add('drag-over'));
+    });
+    
+    // Listen for file drop cancelled events
+    listen('tauri://file-drop-cancelled', (event) => {
+      console.log('File drop cancelled');
+      // Remove visual feedback from all views
+      const viewPanels = document.querySelectorAll('.view-panel');
+      viewPanels.forEach(panel => panel.classList.remove('drag-over'));
+    });
+    
+    console.log('Fallback event listener setup complete');
+  }
+}
+
+// Function to format file size
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Function to read and display file content
+function readFileContent(file, viewId) {
+  const reader = new FileReader();
+  
+  reader.onload = function(e) {
+    const content = e.target.result;
+    const lines = content.split('\n');
+    
+    // Limit the number of lines displayed to avoid overwhelming the terminal
+    const maxLines = 20;
+    const displayLines = lines.slice(0, maxLines);
+    
+    addTerminalEntry(`📄 Content of ${file.name}:`, viewId);
+    addTerminalEntry('--- START ---', viewId);
+    
+    displayLines.forEach(line => {
+      addTerminalEntry(line || ' ', viewId); // Show empty lines as single space
+    });
+    
+    if (lines.length > maxLines) {
+      addTerminalEntry(`... (${lines.length - maxLines} more lines)`, viewId);
+    }
+    
+    addTerminalEntry('--- END ---', viewId);
+  };
+  
+  reader.onerror = function() {
+    addTerminalEntry(`❌ Error reading file: ${file.name}`, viewId);
+  };
+  
+  reader.readAsText(file);
+}
+
+// Function to read Tauri file content
+async function readTauriFileContent(filePath, viewId) {
+  if (!window.__TAURI__) {
+    addTerminalEntry(`❌ Cannot read file: Tauri not available`, viewId);
+    return;
+  }
+  
+  try {
+    const { readTextFile } = window.__TAURI__.fs;
+    const content = await readTextFile(filePath);
+    const lines = content.split('\n');
+    
+    // Limit the number of lines displayed to avoid overwhelming the terminal
+    const maxLines = 20;
+    const displayLines = lines.slice(0, maxLines);
+    
+    const fileName = filePath.split('/').pop() || filePath.split('\\').pop();
+    addTerminalEntry(`📄 Content of ${fileName}:`, viewId);
+    addTerminalEntry('--- START ---', viewId);
+    
+    displayLines.forEach(line => {
+      addTerminalEntry(line || ' ', viewId); // Show empty lines as single space
+    });
+    
+    if (lines.length > maxLines) {
+      addTerminalEntry(`... (${lines.length - maxLines} more lines)`, viewId);
+    }
+    
+    addTerminalEntry('--- END ---', viewId);
+  } catch (error) {
+    const fileName = filePath.split('/').pop() || filePath.split('\\').pop();
+    addTerminalEntry(`❌ Error reading file ${fileName}: ${error.message}`, viewId);
+  }
+}
+
+// Function to setup drag and drop event listeners for a view
+function setupDragAndDropListeners(viewId) {
+  const viewPanel = document.querySelector(`#view-${viewId}`);
+  if (!viewPanel) {
+    console.log(`Warning: Could not find view panel for view-${viewId}`);
+    return;
+  }
+  
+  console.log(`Setting up drag and drop for view-${viewId}`);
+  
+  // Add a simple test click handler to verify event listeners work
+  viewPanel.addEventListener('click', (e) => {
+    console.log('View panel clicked - event listeners are working!');
+  });
+  
+  // Add drag and drop event listeners
+  viewPanel.addEventListener('dragover', handleDragOver);
+  viewPanel.addEventListener('dragleave', handleDragLeave);
+  viewPanel.addEventListener('drop', handleDrop);
+  
+  // Also try adding dragenter for better compatibility
+  viewPanel.addEventListener('dragenter', (e) => {
+    console.log('Drag enter detected');
+    e.preventDefault();
+  });
+  
+  // Make the view panel accept drops
+  viewPanel.style.position = 'relative';
+  
+  console.log(`Drag and drop setup complete for view-${viewId}`);
+}
+
 // Function to initialize a view with event listeners
 function initializeView(viewId) {
   initializeViewData(viewId);
@@ -760,6 +980,9 @@ function initializeView(viewId) {
   
   // Setup popup event listeners
   setupPopupEventListeners(viewId);
+  
+  // Setup drag and drop event listeners
+  setupDragAndDropListeners(viewId);
   
   // Add event listener for Enter key
   viewInfo.textInputEl.addEventListener('keydown', handleEnterKey);
@@ -790,6 +1013,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   
   // Apply font size to the initial view (using loaded config)
   applyFontSizeToView(1);
+  
+  // Setup Tauri file drop listener
+  setupTauriFileDropListener();
+  
+  // Bind onDragDropEvent to window for additional access
+  window.onDragDropEvent = onDragDropEvent;
+  console.log('onDragDropEvent bound to window');
   
   // Add event listener for floating button
   const floatingAddBtnEl = document.querySelector("#floating-add-btn");
