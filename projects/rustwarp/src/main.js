@@ -2,73 +2,72 @@
 let viewCounter = 1;
 let viewData = {}; // Store data for each view
 let maxViews = 2;
+let currentFontSize = 13; // Default font size in pixels
+const minFontSize = 8;
+const maxFontSize = 24;
+const CONFIG_FILE = 'config.json';
+
+// Configuration object
+let config = {
+  fontSize: 13
+};
 
 // Initialize view data
 function initializeViewData(viewId) {
   viewData[viewId] = {
     rowCounter: 0,
     textInputEl: null,
-    tableBodyEl: null,
     rowCountEl: null
   };
 }
 
-// Function to add a new row to a specific view's table
-function addTableRow(text, viewId) {
-  if (!text.trim()) return; // Don't add empty rows
-  
+// Function to add a new entry to the terminal-like output
+function addTerminalEntry(text, viewId) {
+  if (!text.trim()) return; // Don't process empty text
+
   const viewInfo = viewData[viewId];
   if (!viewInfo) return;
-  
+
   viewInfo.rowCounter++;
   const currentTime = new Date().toLocaleString();
-  
-  // Create new row element
-  const row = document.createElement('tr');
-  row.innerHTML = `
-    <td>${viewInfo.rowCounter}</td>
-    <td class="text-cell">${escapeHtml(text)}</td>
-    <td class="time-cell">${currentTime}</td>
-    <td class="actions-cell">
-      <button class="delete-btn" onclick="deleteRow(this, ${viewId})">Delete</button>
-    </td>
+
+  // Create new terminal row
+  const terminalRow = document.createElement('div');
+  terminalRow.className = 'terminal-row';
+  terminalRow.innerHTML = `
+    <span class="row-time" style="font-size: ${Math.max(8, currentFontSize - 2)}px;">[${currentTime}]</span>
+    <span class="row-text" style="font-size: ${currentFontSize}px;">${escapeHtml(text)}</span>
   `;
-  
-  // Add row to table
-  viewInfo.tableBodyEl.appendChild(row);
-  
+
+  // Add terminal entry
+  const terminalOutput = document.getElementById(`terminal-output-${viewId}`);
+  terminalOutput.appendChild(terminalRow);
+
   // Update row count
   updateRowCount(viewId);
-  
+
   // Clear input
   viewInfo.textInputEl.value = '';
-  
-  // Add fade-in animation
-  row.style.opacity = '0';
+
+  // Auto-scroll to keep input visible
+  scrollToInput(viewId);
+
+  // Add fade-in effect
+  terminalRow.style.opacity = '0';
   setTimeout(() => {
-    row.style.transition = 'opacity 0.3s ease-in';
-    row.style.opacity = '1';
-  }, 10);
+    terminalRow.style.transition = 'opacity 0.1s ease-in';
+    terminalRow.style.opacity = '1';
+  }, 5);
 }
 
-// Function to delete a row
-function deleteRow(button, viewId) {
-  const row = button.closest('tr');
-  row.style.transition = 'opacity 0.3s ease-out';
-  row.style.opacity = '0';
-  
-  setTimeout(() => {
-    row.remove();
-    updateRowCount(viewId);
-  }, 300);
-}
 
 // Function to update row count for a specific view
 function updateRowCount(viewId) {
   const viewInfo = viewData[viewId];
   if (!viewInfo) return;
   
-  const currentRows = viewInfo.tableBodyEl.children.length;
+  const terminalOutput = document.getElementById(`terminal-output-${viewId}`);
+  const currentRows = terminalOutput ? terminalOutput.children.length : 0;
   viewInfo.rowCountEl.textContent = currentRows;
 }
 
@@ -79,13 +78,198 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// Function to scroll to input and ensure it's visible
+function scrollToInput(viewId) {
+  const viewInfo = viewData[viewId];
+  if (!viewInfo || !viewInfo.textInputEl) return;
+  
+  // Get the terminal output container and scroll it to bottom
+  const terminalOutput = document.getElementById(`terminal-output-${viewId}`);
+  if (terminalOutput) {
+    setTimeout(() => {
+      terminalOutput.scrollTop = terminalOutput.scrollHeight;
+      
+      // Keep focus on the input
+      viewInfo.textInputEl.focus();
+    }, 100); // Small delay to ensure DOM is updated
+  }
+}
+
 // Function to handle Enter key press
 function handleEnterKey(event) {
   if (event.key === 'Enter') {
     const viewId = parseInt(event.target.dataset.viewId);
     const text = event.target.value.trim();
     if (text) {
-      addTableRow(text, viewId);
+      addTerminalEntry(text, viewId);
+    }
+  }
+}
+
+// Function to load configuration from file
+async function loadConfig() {
+  if (!window.__TAURI__) {
+    console.log('Not running in Tauri, using defaults');
+    return;
+  }
+
+  try {
+    const { readTextFile, BaseDirectory } = window.__TAURI__.fs;
+    const configData = await readTextFile(CONFIG_FILE, { 
+      baseDir: BaseDirectory.AppConfig 
+    });
+    config = JSON.parse(configData);
+    
+    // Apply loaded font size
+    if (config.fontSize && config.fontSize >= minFontSize && config.fontSize <= maxFontSize) {
+      currentFontSize = config.fontSize;
+      console.log(`✅ Loaded font size: ${currentFontSize}px`);
+    } else {
+      console.log('⚠️ Invalid font size in config, using default');
+      currentFontSize = 13;
+      config.fontSize = 13;
+      await saveConfig();
+    }
+  } catch (error) {
+    console.log('📁 No existing config found, creating default config');
+    // Create default config
+    config = { fontSize: 13 };
+    currentFontSize = 13;
+    await saveConfig();
+    console.log(`✅ Created default config with font size: ${currentFontSize}px`);
+  }
+}
+
+// Function to save configuration to file
+async function saveConfig() {
+  if (!window.__TAURI__) {
+    console.log('Not running in Tauri, cannot save config');
+    return;
+  }
+
+  try {
+    const { writeTextFile, BaseDirectory } = window.__TAURI__.fs;
+    config.fontSize = currentFontSize;
+    await writeTextFile(CONFIG_FILE, JSON.stringify(config, null, 2), {
+      baseDir: BaseDirectory.AppConfig
+    });
+    console.log(`💾 Saved font size: ${currentFontSize}px`);
+  } catch (error) {
+    console.error('❌ Failed to save config:', error);
+    // Try to create the directory first and retry
+    try {
+      const { mkdir, BaseDirectory } = window.__TAURI__.fs;
+      await mkdir('', { baseDir: BaseDirectory.AppConfig, recursive: true });
+      await writeTextFile(CONFIG_FILE, JSON.stringify(config, null, 2), {
+        baseDir: BaseDirectory.AppConfig
+      });
+      console.log(`💾 Created directory and saved font size: ${currentFontSize}px`);
+    } catch (retryError) {
+      console.error('❌ Failed to save config even after creating directory:', retryError);
+    }
+  }
+}
+
+// Function to adjust font size
+function adjustFontSize(delta) {
+  const newSize = Math.max(minFontSize, Math.min(maxFontSize, currentFontSize + delta));
+  if (newSize !== currentFontSize) {
+    currentFontSize = newSize;
+    updateTerminalFontSize();
+    // Save the new font size
+    saveConfig();
+  }
+}
+
+// Function to update all terminal elements with new font size
+function updateTerminalFontSize() {
+  // Update CSS custom property for dynamic font sizing
+  document.documentElement.style.setProperty('--terminal-font-size', `${currentFontSize}px`);
+  
+  // Update terminal outputs
+  const terminalOutputs = document.querySelectorAll('.terminal-output');
+  terminalOutputs.forEach(output => {
+    output.style.fontSize = `${currentFontSize}px`;
+  });
+  
+  // Update terminal inputs
+  const terminalInputs = document.querySelectorAll('.terminal-input');
+  terminalInputs.forEach(input => {
+    input.style.fontSize = `${currentFontSize}px`;
+  });
+  
+  // Update text inputs
+  const textInputs = document.querySelectorAll('.text-input');
+  textInputs.forEach(input => {
+    input.style.fontSize = `${currentFontSize}px`;
+  });
+  
+  // Update terminal stats
+  const terminalStats = document.querySelectorAll('.terminal-stats');
+  terminalStats.forEach(stats => {
+    stats.style.fontSize = `${Math.max(8, currentFontSize - 2)}px`;
+  });
+  
+  // Update timestamp font size (slightly smaller)
+  const terminalTimes = document.querySelectorAll('.terminal-row .row-time');
+  terminalTimes.forEach(time => {
+    time.style.fontSize = `${Math.max(8, currentFontSize - 2)}px`;
+  });
+  
+  // Update terminal text
+  const terminalTexts = document.querySelectorAll('.terminal-row .row-text');
+  terminalTexts.forEach(text => {
+    text.style.fontSize = `${currentFontSize}px`;
+  });
+}
+
+// Function to apply current font size to a specific view
+function applyFontSizeToView(viewId) {
+  // Update terminal output for this view
+  const terminalOutput = document.querySelector(`#terminal-output-${viewId}`);
+  if (terminalOutput) {
+    terminalOutput.style.fontSize = `${currentFontSize}px`;
+  }
+  
+  // Update terminal input for this view
+  const terminalInput = document.querySelector(`#view-${viewId} .terminal-input`);
+  if (terminalInput) {
+    terminalInput.style.fontSize = `${currentFontSize}px`;
+  }
+  
+  // Update text input for this view
+  const textInput = document.querySelector(`#text-input-${viewId}`);
+  if (textInput) {
+    textInput.style.fontSize = `${currentFontSize}px`;
+  }
+  
+  // Update terminal stats for this view
+  const terminalStats = document.querySelector(`#view-${viewId} .terminal-stats`);
+  if (terminalStats) {
+    terminalStats.style.fontSize = `${Math.max(8, currentFontSize - 2)}px`;
+  }
+}
+
+// Function to handle global keyboard shortcuts
+function handleGlobalKeydown(event) {
+  const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+  const ctrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
+  
+  if (ctrlOrCmd) {
+    if (event.key === '=' || event.key === '+') {
+      // Increase font size
+      event.preventDefault();
+      adjustFontSize(1);
+    } else if (event.key === '-' || event.key === '_') {
+      // Decrease font size
+      event.preventDefault();
+      adjustFontSize(-1);
+    } else if (event.key === '0') {
+      // Reset to default font size
+      event.preventDefault();
+      currentFontSize = 13;
+      updateTerminalFontSize();
+      saveConfig();
     }
   }
 }
@@ -200,42 +384,29 @@ function createNewView() {
   const newViewHtml = `
     <div class="view-panel" id="view-${newViewId}" data-view-id="${newViewId}">
       <div class="view-header">
-        <h2>Table View ${newViewId}</h2>
+        <h2>Terminal View ${newViewId}</h2>
         <button class="close-view-btn" onclick="closeView(${newViewId})" title="Close view">×</button>
       </div>
       
       <div class="view-content">
-        <p>Type text and press Enter to add rows to the table</p>
+        <div class="terminal-output" id="terminal-output-${newViewId}">
+          <!-- Terminal rows will be added here dynamically -->
+        </div>
         
-        <div class="input-section">
+        <div class="terminal-stats">
+          <span>Total entries: <span id="row-count-${newViewId}" class="row-count">0</span></span>
+        </div>
+        
+        <div class="terminal-input">
+          <span class="terminal-prompt">$</span>
           <input 
             id="text-input-${newViewId}" 
             class="text-input"
             type="text" 
-            placeholder="Enter text and press Enter..." 
+            placeholder="type your command here..." 
             autocomplete="off"
             data-view-id="${newViewId}"
           />
-        </div>
-
-        <div class="table-section">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Text</th>
-                <th>Added At</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="table-body-${newViewId}" class="table-body">
-              <!-- Rows will be added here dynamically -->
-            </tbody>
-          </table>
-        </div>
-
-        <div class="stats">
-          <p>Total rows: <span id="row-count-${newViewId}" class="row-count">0</span></p>
         </div>
       </div>
     </div>
@@ -246,6 +417,9 @@ function createNewView() {
   
   // Initialize view data and event listeners
   initializeView(newViewId);
+  
+  // Apply current font size to the new view
+  applyFontSizeToView(newViewId);
   
   // Focus on new view's input
   viewData[newViewId].textInputEl.focus();
@@ -399,11 +573,20 @@ function initializeView(viewId) {
   
   const viewInfo = viewData[viewId];
   viewInfo.textInputEl = document.querySelector(`#text-input-${viewId}`);
-  viewInfo.tableBodyEl = document.querySelector(`#table-body-${viewId}`);
   viewInfo.rowCountEl = document.querySelector(`#row-count-${viewId}`);
   
   // Add event listener for Enter key
   viewInfo.textInputEl.addEventListener('keydown', handleEnterKey);
+  
+  // Add event listener for focus to auto-scroll
+  viewInfo.textInputEl.addEventListener('focus', () => {
+    scrollToInput(viewId);
+  });
+  
+  // Also ensure input stays visible when clicked
+  viewInfo.textInputEl.addEventListener('click', () => {
+    setTimeout(() => scrollToInput(viewId), 50);
+  });
 }
 
 // Function to handle floating button click
@@ -412,13 +595,22 @@ function handleFloatingButtonClick() {
 }
 
 // Initialize the app when DOM is loaded
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
+  // Load configuration first to get saved font size
+  await loadConfig();
+  
   // Initialize first view
   initializeView(1);
+  
+  // Apply font size to the initial view (using loaded config)
+  applyFontSizeToView(1);
   
   // Add event listener for floating button
   const floatingAddBtnEl = document.querySelector("#floating-add-btn");
   floatingAddBtnEl.addEventListener("click", handleFloatingButtonClick);
+  
+  // Add global keyboard shortcuts for font size adjustment
+  document.addEventListener('keydown', handleGlobalKeydown);
   
   // Focus on first view's input when page loads
   viewData[1].textInputEl.focus();
@@ -431,5 +623,4 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 // Make functions global so they can be called from HTML
-window.deleteRow = deleteRow;
 window.closeView = closeView;
