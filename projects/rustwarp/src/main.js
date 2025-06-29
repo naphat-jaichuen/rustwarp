@@ -12,6 +12,21 @@ let config = {
   fontSize: 13
 };
 
+// Popup state
+let selectedPopupIndex = -1;
+let popupData = [
+  { command: 'ls', description: 'List directory contents', example: 'ls -la' },
+  { command: 'cd', description: 'Change directory', example: 'cd /home/user' },
+  { command: 'pwd', description: 'Print working directory', example: 'pwd' },
+  { command: 'mkdir', description: 'Create directory', example: 'mkdir newfolder' },
+  { command: 'rm', description: 'Remove files/directories', example: 'rm file.txt' },
+  { command: 'cp', description: 'Copy files', example: 'cp file1.txt file2.txt' },
+  { command: 'mv', description: 'Move/rename files', example: 'mv old.txt new.txt' },
+  { command: 'cat', description: 'Display file contents', example: 'cat file.txt' },
+  { command: 'grep', description: 'Search text patterns', example: 'grep "pattern" file.txt' },
+  { command: 'chmod', description: 'Change file permissions', example: 'chmod 755 script.sh' }
+];
+
 // Initialize view data
 function initializeViewData(viewId) {
   viewData[viewId] = {
@@ -398,6 +413,20 @@ function createNewView() {
         </div>
         
         <div class="terminal-input">
+          <div class="popup-overlay" id="popup-overlay-${newViewId}">
+            <table class="popup-table">
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Description</th>
+                  <th>Example</th>
+                </tr>
+              </thead>
+              <tbody id="popup-table-body-${newViewId}">
+                <!-- Popup rows will be added here dynamically -->
+              </tbody>
+            </table>
+          </div>
           <span class="terminal-prompt">$</span>
           <input 
             id="text-input-${newViewId}" 
@@ -567,6 +596,160 @@ function updateViewLayout() {
   }
 }
 
+// Popup functionality
+
+// Function to show popup with filtered suggestions
+function showPopup(viewId, filterText = '') {
+  const popup = document.getElementById(`popup-overlay-${viewId}`);
+  const tableBody = document.getElementById(`popup-table-body-${viewId}`);
+  
+  if (!popup || !tableBody) return;
+  
+  // Filter data based on input text
+  const filteredData = popupData.filter(item => 
+    item.command.toLowerCase().includes(filterText.toLowerCase()) ||
+    item.description.toLowerCase().includes(filterText.toLowerCase())
+  );
+  
+  // Clear existing rows
+  tableBody.innerHTML = '';
+  
+  // Add filtered rows
+  filteredData.forEach((item, index) => {
+    const row = document.createElement('tr');
+    row.setAttribute('data-index', index);
+    row.innerHTML = `
+      <td>${item.command}</td>
+      <td>${item.description}</td>
+      <td>${item.example}</td>
+    `;
+    
+    // Add click handler
+    row.addEventListener('click', () => {
+      selectPopupItem(viewId, item.command);
+    });
+    
+    tableBody.appendChild(row);
+  });
+  
+  // Show popup if there are results
+  if (filteredData.length > 0) {
+    popup.style.display = 'block';
+    selectedPopupIndex = -1;
+  } else {
+    popup.style.display = 'none';
+  }
+}
+
+// Function to hide popup
+function hidePopup(viewId) {
+  const popup = document.getElementById(`popup-overlay-${viewId}`);
+  if (popup) {
+    popup.style.display = 'none';
+    selectedPopupIndex = -1;
+  }
+}
+
+// Function to select item from popup
+function selectPopupItem(viewId, command) {
+  const viewInfo = viewData[viewId];
+  if (viewInfo && viewInfo.textInputEl) {
+    viewInfo.textInputEl.value = command;
+    hidePopup(viewId);
+    viewInfo.textInputEl.focus();
+  }
+}
+
+// Function to navigate popup with arrow keys
+function navigatePopup(viewId, direction) {
+  const popup = document.getElementById(`popup-overlay-${viewId}`);
+  const tableBody = document.getElementById(`popup-table-body-${viewId}`);
+  
+  if (!popup || popup.style.display === 'none') return;
+  
+  const rows = tableBody.querySelectorAll('tr');
+  if (rows.length === 0) return;
+  
+  // Remove current selection
+  rows.forEach(row => row.classList.remove('selected'));
+  
+  // Update selected index
+  if (direction === 'down') {
+    selectedPopupIndex = (selectedPopupIndex + 1) % rows.length;
+  } else if (direction === 'up') {
+    selectedPopupIndex = selectedPopupIndex <= 0 ? rows.length - 1 : selectedPopupIndex - 1;
+  }
+  
+  // Apply selection
+  if (selectedPopupIndex >= 0 && selectedPopupIndex < rows.length) {
+    rows[selectedPopupIndex].classList.add('selected');
+  }
+}
+
+// Function to select current popup item with Enter
+function selectCurrentPopupItem(viewId) {
+  const popup = document.getElementById(`popup-overlay-${viewId}`);
+  const tableBody = document.getElementById(`popup-table-body-${viewId}`);
+  
+  if (!popup || popup.style.display === 'none') return false;
+  
+  const rows = tableBody.querySelectorAll('tr');
+  if (selectedPopupIndex >= 0 && selectedPopupIndex < rows.length) {
+    const selectedRow = rows[selectedPopupIndex];
+    const command = selectedRow.cells[0].textContent;
+    selectPopupItem(viewId, command);
+    return true;
+  }
+  
+  return false;
+}
+
+// Enhanced input event handlers
+function setupPopupEventListeners(viewId) {
+  const input = document.getElementById(`text-input-${viewId}`);
+  if (!input) return;
+  
+  // Show popup on input
+  input.addEventListener('input', (e) => {
+    const value = e.target.value;
+    if (value.length > 0) {
+      showPopup(viewId, value);
+    } else {
+      hidePopup(viewId);
+    }
+  });
+  
+  // Handle special keys
+  input.addEventListener('keydown', (e) => {
+    switch(e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        navigatePopup(viewId, 'down');
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        navigatePopup(viewId, 'up');
+        break;
+      case 'Escape':
+        hidePopup(viewId);
+        break;
+      case 'Tab':
+        e.preventDefault();
+        if (selectCurrentPopupItem(viewId)) {
+          // Item was selected, don't process as normal tab
+        }
+        break;
+    }
+  });
+  
+  // Hide popup when input loses focus (with delay to allow for clicks)
+  input.addEventListener('blur', () => {
+    setTimeout(() => {
+      hidePopup(viewId);
+    }, 150);
+  });
+}
+
 // Function to initialize a view with event listeners
 function initializeView(viewId) {
   initializeViewData(viewId);
@@ -574,6 +757,9 @@ function initializeView(viewId) {
   const viewInfo = viewData[viewId];
   viewInfo.textInputEl = document.querySelector(`#text-input-${viewId}`);
   viewInfo.rowCountEl = document.querySelector(`#row-count-${viewId}`);
+  
+  // Setup popup event listeners
+  setupPopupEventListeners(viewId);
   
   // Add event listener for Enter key
   viewInfo.textInputEl.addEventListener('keydown', handleEnterKey);
