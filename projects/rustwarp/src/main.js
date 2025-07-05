@@ -37,7 +37,7 @@ function initializeViewData(viewId) {
 }
 
 // Function to add a new entry to the terminal-like output with optional expandable content
-function addTerminalEntry(text, viewId, isFileContent = false, expandableContent = null) {
+function addTerminalEntry(text, viewId, isFileContent = false, expandableContent = null, allowHtml = false) {
   if (!text.trim() && !isFileContent) return; // Don't process empty text unless it's file content
 
   const viewInfo = viewData[viewId];
@@ -58,7 +58,7 @@ function addTerminalEntry(text, viewId, isFileContent = false, expandableContent
     <div class="row-content-column ${isFileContent ? 'file-content' : ''}" style="font-size: ${currentFontSize}px;">
       <div class="row-main-content">
         ${expandableContent ? '<span class="expand-button" onclick="toggleRowContent(\'' + rowId + '\')" title="Click to expand/collapse">▶</span>' : ''}
-        <span class="row-text">${escapeHtml(text)}</span>
+        <span class="row-text">${allowHtml ? text : escapeHtml(text)}</span>
       </div>
     </div>
   `;
@@ -1514,8 +1514,8 @@ async function handleTauriDirectory(dirPath, viewId) {
   const setFolderButton = `<button class="set-folder-btn" onclick="setCurrentFolder('${escapeHtml(dirPath)}')" title="Set as current folder">📁 Set Current Folder</button>`;
   const dirInfo = `📁 ${dirName} - ${setFolderButton}`;
   
-  // Add terminal entry without expandable content
-  addTerminalEntry(dirInfo, viewId, false, null);
+  // Add terminal entry without expandable content, allowing HTML for the button
+  addTerminalEntry(dirInfo, viewId, false, null, true);
 }
 
 // Function to read Tauri file content
