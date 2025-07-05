@@ -54,12 +54,61 @@ fn handle_directory(path: &str) -> Result<String, String> {
     }
 }
 
+// Open system file manager for a given path
+#[tauri::command]
+fn open_file_manager(path: &str) -> Result<String, String> {
+    let path_obj = Path::new(path);
+    
+    if !path_obj.exists() {
+        return Err(format!("Path does not exist: {}", path));
+    }
+    
+    // Open file manager based on operating system
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        match Command::new("open").arg(path).output() {
+            Ok(_) => Ok(format!("Opened file manager for: {}", path)),
+            Err(e) => Err(format!("Failed to open file manager: {}", e))
+        }
+    }
+    
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        match Command::new("explorer").arg(path).output() {
+            Ok(_) => Ok(format!("Opened file manager for: {}", path)),
+            Err(e) => Err(format!("Failed to open file manager: {}", e))
+        }
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::Command;
+        // Try different file managers commonly available on Linux
+        let file_managers = ["xdg-open", "nautilus", "dolphin", "thunar", "pcmanfm"];
+        
+        for manager in &file_managers {
+            if let Ok(_) = Command::new(manager).arg(path).output() {
+                return Ok(format!("Opened file manager for: {}", path));
+            }
+        }
+        
+        Err("No suitable file manager found".to_string())
+    }
+    
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        Err("File manager opening not supported on this platform".to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
-        .invoke_handler(tauri::generate_handler![greet, is_directory, handle_directory])
+        .invoke_handler(tauri::generate_handler![greet, is_directory, handle_directory, open_file_manager])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

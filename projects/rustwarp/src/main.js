@@ -1476,6 +1476,189 @@ function readFileContent(file, viewId) {
   reader.readAsText(file);
 }
 
+// Unified Path Management System for cross-branch communication
+class PathManager {
+  constructor() {
+    this.paths = new Map(); // viewId -> path mapping
+    this.listeners = new Set(); // Event listeners for path changes
+    this.globalPath = null; // Global current path
+    
+    // Initialize event system
+    this.initializeEventSystem();
+  }
+  
+  initializeEventSystem() {
+    // Create custom events for path operations
+    this.events = {
+      PATH_SET: 'path:set',
+      PATH_BROWSE: 'path:browse',
+      PATH_CHANGED: 'path:changed'
+    };
+  }
+  
+  // Set path for a specific view
+  setPath(viewId, path) {
+    const oldPath = this.paths.get(viewId);
+    this.paths.set(viewId, path);
+    this.globalPath = path;
+    
+    // Trigger path change event
+    this.triggerEvent(this.events.PATH_SET, {
+      viewId,
+      path,
+      oldPath,
+      timestamp: Date.now()
+    });
+    
+    return path;
+  }
+  
+  // Get path for a specific view
+  getPath(viewId) {
+    return this.paths.get(viewId) || null;
+  }
+  
+  // Get global current path
+  getGlobalPath() {
+    return this.globalPath;
+  }
+  
+  // Browse path (trigger browse functionality)
+  browsePath(viewId) {
+    const path = this.getPath(viewId);
+    if (!path) {
+      throw new Error('No path set for this view');
+    }
+    
+    this.triggerEvent(this.events.PATH_BROWSE, {
+      viewId,
+      path,
+      timestamp: Date.now()
+    });
+    
+    return path;
+  }
+  
+  // Add event listener
+  addEventListener(event, callback) {
+    document.addEventListener(event, callback);
+    this.listeners.add({ event, callback });
+  }
+  
+  // Remove event listener
+  removeEventListener(event, callback) {
+    document.removeEventListener(event, callback);
+    this.listeners.delete({ event, callback });
+  }
+  
+  // Trigger custom event
+  triggerEvent(eventType, data) {
+    const event = new CustomEvent(eventType, { detail: data });
+    document.dispatchEvent(event);
+  }
+  
+  // Get all paths
+  getAllPaths() {
+    return Object.fromEntries(this.paths);
+  }
+  
+  // Clear path for view
+  clearPath(viewId) {
+    const oldPath = this.paths.get(viewId);
+    this.paths.delete(viewId);
+    
+    this.triggerEvent(this.events.PATH_CHANGED, {
+      viewId,
+      path: null,
+      oldPath,
+      action: 'cleared',
+      timestamp: Date.now()
+    });
+  }
+}
+
+// Initialize global path manager
+if (!window.pathManager) {
+  window.pathManager = new PathManager();
+  
+  // Set up cross-branch event listeners
+  initializeCrossBranchCommunication();
+}
+
+// Initialize cross-branch communication system
+function initializeCrossBranchCommunication() {
+  console.log('🔗 Initializing cross-branch communication system...');
+  
+  // Listen for path set events
+  window.pathManager.addEventListener('path:set', (event) => {
+    const { viewId, path, oldPath } = event.detail;
+    console.log(`📁 Path set event: View ${viewId} → ${path}`);
+    
+    // Update legacy window.viewFolders for backward compatibility
+    if (!window.viewFolders) {
+      window.viewFolders = {};
+    }
+    window.viewFolders[viewId] = path;
+    
+    // Trigger integrations with file handling features
+    if (typeof onPathSetIntegration === 'function') {
+      onPathSetIntegration(viewId, path, oldPath);
+    }
+  });
+  
+  // Listen for path browse events
+  window.pathManager.addEventListener('path:browse', (event) => {
+    const { viewId, path } = event.detail;
+    console.log(`🗂️ Path browse event: View ${viewId} → ${path}`);
+    
+    // Trigger browse integrations
+    if (typeof onPathBrowseIntegration === 'function') {
+      onPathBrowseIntegration(viewId, path);
+    }
+  });
+  
+  // Listen for folder set completion events
+  document.addEventListener('folder:set:complete', (event) => {
+    const { viewId, dirPath, metadata } = event.detail;
+    console.log(`✅ Folder set complete: View ${viewId}`, metadata);
+  });
+  
+  // Listen for folder browse completion events
+  document.addEventListener('folder:browse:complete', (event) => {
+    const { viewId, dirPath } = event.detail;
+    console.log(`✅ Folder browse complete: View ${viewId} → ${dirPath}`);
+  });
+  
+  console.log('✅ Cross-branch communication system initialized');
+}
+
+// Integration hooks for other branches to implement
+// These can be overridden by features from other branches
+
+// Hook for when a path is set (can be used by file handling branch)
+function onPathSetIntegration(viewId, path, oldPath) {
+  console.log(`🔗 Path set integration hook: ${viewId} → ${path}`);
+  
+  // This function can be overridden by other branches to add their functionality
+  // For example, the file handling branch could:
+  // - Set up file watchers
+  // - Scan for supported file types
+  // - Prepare syntax highlighting contexts
+  // - Update terminal working directory
+}
+
+// Hook for when a path is browsed (can be used by file handling branch)
+function onPathBrowseIntegration(viewId, path) {
+  console.log(`🔗 Path browse integration hook: ${viewId} → ${path}`);
+  
+  // This function can be overridden by other branches to add their functionality
+  // For example, the file handling branch could:
+  // - Show file tree view
+  // - List files with syntax highlighting info
+  // - Open recently accessed files
+  // - Provide file type statistics
+}
+
 // Function to set current folder
 async function setCurrentFolder(dirPath) {
   if (!window.__TAURI__) {
@@ -1492,15 +1675,20 @@ async function setCurrentFolder(dirPath) {
     console.log('Set current folder:', dirPath);
     console.log('Result:', result);
     
-    // Update global variable
-    window.currentFolder = dirPath;
-    
     // Get the active view and update its folder display
     const viewId = getActiveViewId();
+    
+    // Use path manager to set path (this triggers events)
+    window.pathManager.setPath(viewId, dirPath);
+    
+    // Update UI
     updateViewFolderDisplay(viewId, dirPath);
     
     // Show success message
     addTerminalEntry(`✅ Current folder set to: ${dirPath}`, viewId);
+    
+    // Trigger any connected functionality from other branches
+    triggerCrossBranchPathIntegration(viewId, dirPath, 'set');
     
   } catch (error) {
     console.error('Failed to set current folder:', error);
@@ -1534,25 +1722,142 @@ function updateViewFolderDisplay(viewId, folderPath) {
   window.viewFolders[viewId] = folderPath;
 }
 
-// Function to browse the current folder (placeholder for future implementation)
+// Function to browse the current folder
 function browseCurrentFolder(viewId) {
-  const folderPath = window.viewFolders ? window.viewFolders[viewId] : null;
+  try {
+    // Use path manager to get path and trigger browse event
+    const folderPath = window.pathManager.browsePath(viewId);
+    
+    console.log('Browse folder:', folderPath);
+    
+    // Trigger cross-branch integration for browse functionality
+    triggerCrossBranchPathIntegration(viewId, folderPath, 'browse');
+    
+    // Show browse action in terminal
+    addTerminalEntry(`📁 Browsing folder: ${folderPath}`, viewId);
+    
+  } catch (error) {
+    addTerminalEntry(`❌ ${error.message}`, viewId);
+  }
+}
+
+// Cross-branch integration functions
+function triggerCrossBranchPathIntegration(viewId, dirPath, action) {
+  console.log(`🔗 Cross-branch integration triggered: ${action} for ${dirPath}`);
   
-  if (!folderPath) {
-    addTerminalEntry('❌ No folder set for this view', viewId);
-    return;
+  // This function connects features from different branches
+  switch (action) {
+    case 'set':
+      // When a folder is set, trigger file handling branch features
+      onFolderSet(viewId, dirPath);
+      break;
+      
+    case 'browse':
+      // When browse is triggered, implement folder browsing features
+      onFolderBrowse(viewId, dirPath);
+      break;
+      
+    default:
+      console.log(`Unknown action: ${action}`);
+  }
+}
+
+// Handler for when a folder is set (connects to file handling branch)
+function onFolderSet(viewId, dirPath) {
+  // This can trigger functionality from the file handling branch
+  console.log(`📁 Folder set handler: ${dirPath}`);
+  
+  // Example integrations:
+  // 1. Auto-scan folder for supported file types
+  // 2. Set up file watchers for the directory
+  // 3. Prepare syntax highlighting for common files in the directory
+  // 4. Update terminal context to use this as working directory
+  
+  // Store additional metadata about the folder
+  if (!window.folderMetadata) {
+    window.folderMetadata = {};
   }
   
-  // Placeholder for future browse functionality
-  console.log('Browse folder:', folderPath);
-  addTerminalEntry(`📁 Browse functionality coming soon for: ${folderPath}`, viewId);
+  window.folderMetadata[viewId] = {
+    path: dirPath,
+    setAt: new Date().toISOString(),
+    lastAccessed: new Date().toISOString(),
+    // Can be extended with file counts, types, etc.
+  };
   
-  // TODO: Implement folder browsing functionality
-  // This could:
-  // - Open system file manager
-  // - Show folder contents in expandable view
-  // - Navigate to folder in terminal
-  // - etc.
+  // Trigger custom event for other features to listen to
+  window.pathManager.triggerEvent('folder:set:complete', {
+    viewId,
+    dirPath,
+    metadata: window.folderMetadata[viewId]
+  });
+}
+
+// Handler for when folder browse is triggered
+function onFolderBrowse(viewId, dirPath) {
+  console.log(`🗂️ Browse handler: ${dirPath}`);
+  
+  // This is where you can implement actual browse functionality
+  // Connected to file handling branch features:
+  
+  // Option 1: Open system file manager
+  if (window.__TAURI__) {
+    openSystemFileManager(dirPath, viewId);
+  }
+  
+  // Option 2: List directory contents in terminal
+  listDirectoryContents(dirPath, viewId);
+  
+  // Option 3: Trigger file tree view (if implemented in other branch)
+  // triggerFileTreeView(viewId, dirPath);
+  
+  // Update last accessed time
+  if (window.folderMetadata && window.folderMetadata[viewId]) {
+    window.folderMetadata[viewId].lastAccessed = new Date().toISOString();
+  }
+  
+  // Trigger custom event
+  window.pathManager.triggerEvent('folder:browse:complete', {
+    viewId,
+    dirPath
+  });
+}
+
+// Open system file manager
+async function openSystemFileManager(dirPath, viewId) {
+  try {
+    const { invoke } = window.__TAURI__.core;
+    
+    // Call the Rust function to open file manager
+    const result = await invoke('open_file_manager', { path: dirPath });
+    
+    addTerminalEntry(`📂 ${result}`, viewId);
+    console.log('System file manager opened for:', dirPath);
+    
+  } catch (error) {
+    console.error('Failed to open system file manager:', error);
+    addTerminalEntry(`❌ Failed to open file manager: ${error}`, viewId);
+  }
+}
+
+// List directory contents in terminal
+async function listDirectoryContents(dirPath, viewId) {
+  try {
+    const { invoke } = window.__TAURI__.core;
+    
+    // Call Rust function to list directory contents
+    const result = await invoke('handle_directory', { path: dirPath });
+    
+    // Parse and display directory contents
+    addTerminalEntry(`📁 Directory contents for: ${dirPath}`, viewId);
+    addTerminalEntry(result, viewId);
+    
+    // Could be enhanced to show actual file listings
+    
+  } catch (error) {
+    console.error('Failed to list directory contents:', error);
+    addTerminalEntry(`❌ Failed to list directory: ${error.message}`, viewId);
+  }
 }
 
 // Function to handle directory paths
