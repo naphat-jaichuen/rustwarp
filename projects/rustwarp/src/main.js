@@ -142,6 +142,26 @@ function addTerminalEntry(text, viewId, isFileContent = false, expandableContent
           <div class="output-content">${escapeHtml(expandableContent.content)}</div>
         </div>
       `;
+    } else if (expandableContent.type === 'directory') {
+      const actionId = `action-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      expandableDiv.innerHTML = `
+        <div class="expandable-directory">
+          <div class="directory-header">
+            <span class="directory-title">📁 ${expandableContent.title || 'Directory'}</span>
+            <span class="directory-path">${expandableContent.path}</span>
+          </div>
+          <div class="directory-result">${escapeHtml(expandableContent.result)}</div>
+          <div class="directory-actions">
+            <button id="${actionId}" class="directory-action-btn" 
+                    onclick="handleDirectoryAction('${escapeHtml(expandableContent.path)}')"
+                    title="Send directory path to Rust function">
+              🚀 Process Directory
+            </button>
+            <span class="directory-path-display">Absolute path: <code>${expandableContent.path}</code></span>
+          </div>
+        </div>
+      `;
     }
     
     terminalRow.appendChild(expandableDiv);
@@ -1471,11 +1491,82 @@ function readFileContent(file, viewId) {
   reader.readAsText(file);
 }
 
+// Function to handle directory action button click
+async function handleDirectoryAction(dirPath) {
+  if (!window.__TAURI__) {
+    alert('Tauri not available');
+    return;
+  }
+  
+  try {
+    const { invoke } = window.__TAURI__.core;
+    
+    // Call the Rust function with the directory path
+    const result = await invoke('handle_directory', { path: dirPath });
+    
+    // You can customize this to do whatever you want with the result
+    // For now, we'll show an alert and also log to console
+    console.log('Directory action result:', result);
+    alert(`Directory action completed:\n\n${result}`);
+    
+    // Optionally, you could add a terminal entry to show the result
+    // addTerminalEntry(`✅ Directory action: ${result}`, getActiveViewId());
+    
+  } catch (error) {
+    console.error('Directory action failed:', error);
+    alert(`Directory action failed: ${error}`);
+  }
+}
+
+// Function to handle directory paths
+async function handleTauriDirectory(dirPath, viewId) {
+  if (!window.__TAURI__) {
+    addTerminalEntry(`❌ Cannot handle directory: Tauri not available`, viewId);
+    return;
+  }
+  
+  const dirName = dirPath.split('/').pop() || dirPath.split('\\').pop();
+  
+  try {
+    const { invoke } = window.__TAURI__.core;
+    const result = await invoke('handle_directory', { path: dirPath });
+    
+    // Create expandable content for directory
+    const directoryContent = {
+      type: 'directory',
+      title: `Directory: ${dirName}`,
+      dirName: dirName,
+      path: dirPath,
+      result: result
+    };
+    
+    // Display directory info with expandable content and action button
+    const dirInfo = `📁 ${dirName} - Directory`;
+    addTerminalEntry(dirInfo, viewId, false, directoryContent);
+  } catch (error) {
+    addTerminalEntry(`❌ Error processing directory ${dirName}: ${error}`, viewId);
+  }
+}
+
 // Function to read Tauri file content
 async function readTauriFileContent(filePath, viewId) {
   if (!window.__TAURI__) {
     addTerminalEntry(`❌ Cannot read file: Tauri not available`, viewId);
     return;
+  }
+  
+  // First, check if this is a directory
+  try {
+    const { invoke } = window.__TAURI__.core;
+    const isDir = await invoke('is_directory', { path: filePath });
+    
+    if (isDir) {
+      await handleTauriDirectory(filePath, viewId);
+      return;
+    }
+  } catch (error) {
+    console.warn('Could not check if path is directory:', error);
+    // Continue processing as file
   }
   
   const fileName = filePath.split('/').pop() || filePath.split('\\').pop();
