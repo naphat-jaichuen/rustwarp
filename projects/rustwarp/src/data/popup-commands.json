@@ -1,0 +1,184 @@
+{
+  "commands": [
+    {
+      "command": "ls",
+      "description": "List directory contents",
+      "example": "ls -la",
+      "category": "file-system"
+    },
+    {
+      "command": "cd",
+      "description": "Change directory",
+      "example": "cd /home/user",
+      "category": "navigation"
+    },
+    {
+      "command": "pwd",
+      "description": "Print working directory",
+      "example": "pwd",
+      "category": "navigation"
+    },
+    {
+      "command": "mkdir",
+      "description": "Create directory",
+      "example": "mkdir newfolder",
+      "category": "file-system"
+    },
+    {
+      "command": "rm",
+      "description": "Remove files/directories",
+      "example": "rm file.txt",
+      "category": "file-system"
+    },
+    {
+      "command": "cp",
+      "description": "Copy files",
+      "example": "cp file1.txt file2.txt",
+      "category": "file-system"
+    },
+    {
+      "command": "mv",
+      "description": "Move/rename files",
+      "example": "mv old.txt new.txt",
+      "category": "file-system"
+    },
+    {
+      "command": "cat",
+      "description": "Display file contents",
+      "example": "cat file.txt",
+      "category": "file-viewing"
+    },
+    {
+      "command": "grep",
+      "description": "Search text patterns",
+      "example": "grep \"pattern\" file.txt",
+      "category": "text-processing"
+    },
+    {
+      "command": "chmod",
+      "description": "Change file permissions",
+      "example": "chmod 755 script.sh",
+      "category": "file-system"
+    },
+    {
+      "command": "find",
+      "description": "Search for files and directories",
+      "example": "find . -name \"*.txt\"",
+      "category": "file-search"
+    },
+    {
+      "command": "head",
+      "description": "Display first lines of file",
+      "example": "head -n 10 file.txt",
+      "category": "file-viewing"
+    },
+    {
+      "command": "tail",
+      "description": "Display last lines of file",
+      "example": "tail -f logfile.log",
+      "category": "file-viewing"
+    },
+    {
+      "command": "less",
+      "description": "View file content with navigation",
+      "example": "less document.txt",
+      "category": "file-viewing"
+    },
+    {
+      "command": "which",
+      "description": "Locate command executable",
+      "example": "which python",
+      "category": "system-info"
+    },
+    {
+      "command": "ps",
+      "description": "Display running processes",
+      "example": "ps aux",
+      "category": "process-management"
+    },
+    {
+      "command": "kill",
+      "description": "Terminate process by PID",
+      "example": "kill 1234",
+      "category": "process-management"
+    },
+    {
+      "command": "top",
+      "description": "Display system processes",
+      "example": "top",
+      "category": "system-monitoring"
+    },
+    {
+      "command": "df",
+      "description": "Display filesystem disk space",
+      "example": "df -h",
+      "category": "system-info"
+    },
+    {
+      "command": "du",
+      "description": "Display directory disk usage",
+      "example": "du -sh folder/",
+      "category": "system-info"
+    },
+    {
+      "command": "tar",
+      "description": "Archive and compress files",
+      "example": "tar -czf archive.tar.gz folder/",
+      "category": "compression"
+    },
+    {
+      "command": "zip",
+      "description": "Create ZIP archives",
+      "example": "zip -r archive.zip folder/",
+      "category": "compression"
+    },
+    {
+      "command": "unzip",
+      "description": "Extract ZIP archives",
+      "example": "unzip archive.zip",
+      "category": "compression"
+    },
+    {
+      "command": "git",
+      "description": "Git version control",
+      "example": "git status",
+      "category": "version-control"
+    },
+    {
+      "command": "ssh",
+      "description": "Secure shell remote connection",
+      "example": "ssh user@server.com",
+      "category": "network"
+    },
+    {
+      "command": "curl",
+      "description": "Transfer data from servers",
+      "example": "curl -O https://example.com/file.zip",
+      "category": "network"
+    },
+    {
+      "command": "wget",
+      "description": "Download files from web",
+      "example": "wget https://example.com/file.zip",
+      "category": "network"
+    },
+    {
+      "command": "history",
+      "description": "Show command history",
+      "example": "history | grep git",
+      "category": "shell-utilities"
+    },
+    {
+      "command": "alias",
+      "description": "Create command shortcuts",
+      "example": "alias ll='ls -la'",
+      "category": "shell-utilities"
+    },
+    {
+      "command": "echo",
+      "description": "Display text output",
+      "example": "echo \"Hello World\"",
+      "category": "text-processing"
+    }
+  ]
+}

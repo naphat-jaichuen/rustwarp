@@ -14,18 +14,7 @@ let config = {
 
 // Popup state
 let selectedPopupIndex = -1;
-let popupData = [
-  { command: 'ls', description: 'List directory contents', example: 'ls -la' },
-  { command: 'cd', description: 'Change directory', example: 'cd /home/user' },
-  { command: 'pwd', description: 'Print working directory', example: 'pwd' },
-  { command: 'mkdir', description: 'Create directory', example: 'mkdir newfolder' },
-  { command: 'rm', description: 'Remove files/directories', example: 'rm file.txt' },
-  { command: 'cp', description: 'Copy files', example: 'cp file1.txt file2.txt' },
-  { command: 'mv', description: 'Move/rename files', example: 'mv old.txt new.txt' },
-  { command: 'cat', description: 'Display file contents', example: 'cat file.txt' },
-  { command: 'grep', description: 'Search text patterns', example: 'grep "pattern" file.txt' },
-  { command: 'chmod', description: 'Change file permissions', example: 'chmod 755 script.sh' }
-];
+let popupData = []; // Will be loaded from JSON file
 
 // Initialize view data
 function initializeViewData(viewId) {
@@ -314,6 +303,45 @@ function handleEnterKey(event) {
       addTerminalEntry(text, viewId);
     }
   }
+}
+
+// Function to load popup data from JSON file
+async function loadPopupData() {
+  try {
+    const response = await fetch('./data/popup-commands.json');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    popupData = data.commands;
+    console.log(`✅ Loaded ${popupData.length} command suggestions from JSON`);
+    
+    // Log categories for debugging
+    const categories = [...new Set(popupData.map(cmd => cmd.category))];
+    console.log(`📊 Categories available: ${categories.join(', ')}`);
+  } catch (error) {
+    console.error('❌ Failed to load popup data:', error);
+    // Fallback to basic commands if JSON loading fails
+    popupData = [
+      { command: 'ls', description: 'List directory contents', example: 'ls -la', category: 'file-system' },
+      { command: 'cd', description: 'Change directory', example: 'cd /home/user', category: 'navigation' },
+      { command: 'pwd', description: 'Print working directory', example: 'pwd', category: 'navigation' },
+      { command: 'mkdir', description: 'Create directory', example: 'mkdir newfolder', category: 'file-system' },
+      { command: 'rm', description: 'Remove files/directories', example: 'rm file.txt', category: 'file-system' }
+    ];
+    console.log('📋 Using fallback popup data');
+  }
+}
+
+// Utility function to get commands by category
+function getCommandsByCategory(category) {
+  return popupData.filter(cmd => cmd.category === category);
+}
+
+// Utility function to add new commands (for future extensibility)
+function addCustomCommand(command, description, example, category = 'custom') {
+  popupData.push({ command, description, example, category });
+  console.log(`➕ Added custom command: ${command}`);
 }
 
 // Function to load configuration from file
@@ -2166,6 +2194,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   console.log('📋 Loading config...');
   await loadConfig();
   console.log('✅ Config loaded');
+  
+  // Load popup command data from JSON
+  console.log('📊 Loading popup data...');
+  await loadPopupData();
+  console.log('✅ Popup data loaded');
   
   // Initialize first view
   console.log('🔧 Initializing first view...');
