@@ -47,25 +47,112 @@ impl ExtensionManager {
     
     /// Get the extensions directory path
     fn get_extensions_directory() -> Result<PathBuf, Box<dyn std::error::Error>> {
-        // Try to get the executable directory first (bundled app)
-        if let Ok(exe_dir) = std::env::current_exe() {
-            if let Some(parent) = exe_dir.parent() {
+        // Priority 1: Check if running from bundled app (production)
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(parent) = exe_path.parent() {
                 let extensions_path = parent.join("extensions");
                 if extensions_path.exists() {
+                    eprintln!("[Extensions] Using bundled extensions at: {:?}", extensions_path);
                     return Ok(extensions_path);
                 }
             }
         }
         
-        // Fallback to dist/extensions (development)
+        // Priority 2: Check target/debug/extensions (development with post-build)
         let current_dir = std::env::current_dir()?;
-        let extensions_path = current_dir.join("dist").join("extensions");
+        let debug_extensions = current_dir
+            .join("src-tauri")
+            .join("target")
+            .join("debug")
+            .join("extensions");
         
-        if extensions_path.exists() {
-            Ok(extensions_path)
-        } else {
-            Err("Extensions directory not found".into())
+        if debug_extensions.exists() {
+            eprintln!("[Extensions] Using debug build extensions at: {:?}", debug_extensions);
+            return Ok(debug_extensions);
         }
+        
+        // Priority 3: Check target/release/extensions (release build)
+        let release_extensions = current_dir
+            .join("src-tauri")
+            .join("target")
+            .join("release")
+            .join("extensions");
+        
+        if release_extensions.exists() {
+            eprintln!("[Extensions] Using release build extensions at: {:?}", release_extensions);
+            return Ok(release_extensions);
+        }
+        
+        // Priority 4: Create development fallback using built binaries
+        let target_debug = current_dir.join("src-tauri").join("target").join("debug");
+        
+        if target_debug.exists() {
+            eprintln!("[Extensions] Creating development extensions from built binaries");
+            return Self::create_dev_extensions_directory(target_debug);
+        }
+        
+        Err("Extensions directory not found and cannot create development fallback".into())
+    }
+    
+    /// Create a development extensions directory using built binaries
+    fn create_dev_extensions_directory(target_debug: PathBuf) -> Result<PathBuf, Box<dyn std::error::Error>> {
+        let extensions_path = target_debug.join("extensions");
+        
+        // Create extensions directory if it doesn't exist
+        if !extensions_path.exists() {
+            fs::create_dir_all(&extensions_path)?;
+        }
+        
+        // Define extension binaries to copy
+        let extensions = [("findall", "findall"), ("fileops", "fileops"), ("sysinfo", "sysinfo")];
+        
+        // Copy extension binaries if they exist
+        for (name, binary) in &extensions {
+            let source = target_debug.join(binary);
+            let dest = extensions_path.join(binary);
+            
+            if source.exists() && (!dest.exists() || 
+                fs::metadata(&source)?.modified()? > fs::metadata(&dest)?.modified()?) {
+                fs::copy(&source, &dest)?;
+                eprintln!("[Extensions] Copied {} to development extensions", name);
+            }
+        }
+        
+        // Create or update extensions manifest
+        let manifest_path = extensions_path.join("extensions.json");
+        if !manifest_path.exists() {
+            let manifest = ExtensionManifest {
+                extensions: vec![
+                    Extension {
+                        name: "findall".to_string(),
+                        version: "0.1.0".to_string(),
+                        description: "File content search utility with recursive and case-sensitive options".to_string(),
+                        executable: "findall".to_string(),
+                        extension_type: "subprocess".to_string(),
+                    },
+                    Extension {
+                        name: "fileops".to_string(),
+                        version: "0.1.0".to_string(),
+                        description: "File operations utility for copy, move, delete, mkdir, and list operations".to_string(),
+                        executable: "fileops".to_string(),
+                        extension_type: "subprocess".to_string(),
+                    },
+                    Extension {
+                        name: "sysinfo".to_string(),
+                        version: "0.1.0".to_string(),
+                        description: "System information utility displaying CPU, memory, disk, and environment data".to_string(),
+                        executable: "sysinfo".to_string(),
+                        extension_type: "subprocess".to_string(),
+                    },
+                ],
+            };
+            
+            let manifest_json = serde_json::to_string_pretty(&manifest)?;
+            fs::write(&manifest_path, manifest_json)?;
+            eprintln!("[Extensions] Created development extensions manifest");
+        }
+        
+        Ok(extensions_path)
     }
     
     /// Load the extensions manifest

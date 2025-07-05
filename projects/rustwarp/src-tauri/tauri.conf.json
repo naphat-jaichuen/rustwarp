@@ -39,8 +39,7 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "../src/data/command/**/*",
-      "../dist/extensions/**/*"
+      "../src/data/command/**/*"
     ]
   }
 }

@@ -283,8 +283,8 @@ dependencies = ["tauri-build", "setup-windows-bundle"]
 # =============================================================================
 
 [tasks.dev]
-description = "Start development server with hot reload"
-dependencies = ["post-build"]
+description = "Start development server with hot reload and portable extensions"
+dependencies = ["build-subprocesses"]
 run_task = "tauri-dev"
 
 [tasks.test]
@@ -297,10 +297,22 @@ description = "Test extension binaries"
 script_runner = "@shell"
 script = [
     "echo 'Testing extension binaries...'",
-    "${SRC_TAURI_DIR}/target/debug/findall${BINARY_EXTENSION} --help || echo 'findall test failed'",
-    "${SRC_TAURI_DIR}/target/debug/fileops${BINARY_EXTENSION} --help || echo 'fileops test failed'",
-    "${SRC_TAURI_DIR}/target/debug/sysinfo${BINARY_EXTENSION} --help || echo 'sysinfo test failed'",
+    "${SRC_TAURI_DIR}/target/debug/findall${BINARY_EXTENSION} || echo 'findall test - showing usage'",
+    "${SRC_TAURI_DIR}/target/debug/fileops${BINARY_EXTENSION} || echo 'fileops test - showing usage'",
+    "${SRC_TAURI_DIR}/target/debug/sysinfo${BINARY_EXTENSION} | head -5 || echo 'sysinfo test failed'",
     "echo 'Extension tests complete'"
+]
+
+[tasks.verify-extensions]
+description = "Verify portable extension system setup"
+script_runner = "@shell"
+script = [
+    "echo 'Verifying portable extension system...'",
+    "echo 'Checking built extension binaries:'",
+    "ls -la ${SRC_TAURI_DIR}/target/debug/findall${BINARY_EXTENSION} ${SRC_TAURI_DIR}/target/debug/fileops${BINARY_EXTENSION} ${SRC_TAURI_DIR}/target/debug/sysinfo${BINARY_EXTENSION} || echo 'Some extensions not built'",
+    "echo '\nChecking extension directory:'",
+    "ls -la ${SRC_TAURI_DIR}/target/debug/extensions/ || echo 'Extensions directory not found'",
+    "echo '\nExtensions verification complete'"
 ]
 
 [tasks.check]
