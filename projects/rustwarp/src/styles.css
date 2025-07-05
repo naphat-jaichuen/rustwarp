@@ -139,6 +139,56 @@
   background-color: rgba(70, 130, 180, 0.3);
 }
 
+/* Active target styles - enhanced feedback for the selected view */
+.view-panel.active-target {
+  outline: 2px solid #4682b4;
+  outline-offset: 1px;
+  background-color: rgba(70, 130, 180, 0.08);
+  transition: all 0.2s ease;
+}
+
+.view-panel.active-target .view-header {
+  background-color: rgba(70, 130, 180, 0.15);
+  border-bottom: 2px solid #4682b4;
+  transition: all 0.2s ease;
+}
+
+.view-panel.active-target .view-header h2 {
+  color: #4682b4;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.view-panel.active-target .view-header h2::after {
+  content: ' ← ACTIVE';
+  font-size: 0.75em;
+  color: #4682b4;
+  font-weight: normal;
+  opacity: 0.8;
+}
+
+/* Enhanced styling when both active and dragging */
+.view-panel.active-target.drag-active {
+  outline: 3px solid #4682b4;
+  outline-offset: 2px;
+  background-color: rgba(70, 130, 180, 0.2);
+  transform: scale(1.01);
+}
+
+.view-panel.active-target.drag-active .view-header {
+  background-color: rgba(70, 130, 180, 0.3);
+}
+
+.view-panel.active-target.drag-active .view-header h2::after {
+  content: ' ← DROP TARGET';
+  animation: pulse-text 1s infinite;
+}
+
+@keyframes pulse-text {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
 .view-panel.drag-over::after {
   content: '📁 Drop files here → ' attr(data-view-id);
   position: absolute;
@@ -472,6 +522,32 @@ button {
   
   .view-panel.drag-over .view-header {
     background-color: rgba(100, 150, 200, 0.4);
+  }
+  
+  .view-panel.active-target {
+    outline-color: #64a0e6;
+    background-color: rgba(100, 150, 200, 0.12);
+  }
+  
+  .view-panel.active-target .view-header {
+    background-color: rgba(100, 150, 200, 0.2);
+    border-bottom-color: #64a0e6;
+  }
+  
+  .view-panel.active-target .view-header h2 {
+    color: #64a0e6;
+  }
+  
+  .view-panel.active-target .view-header h2::after {
+    color: #64a0e6;
+  }
+  
+  .view-panel.active-target.drag-active {
+    background-color: rgba(100, 150, 200, 0.25);
+  }
+  
+  .view-panel.active-target.drag-active .view-header {
+    background-color: rgba(100, 150, 200, 0.35);
   }
   
   .popup-overlay {

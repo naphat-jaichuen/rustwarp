@@ -789,7 +789,19 @@ function setupPopupEventListeners(viewId) {
 
 // Function to get the currently active or focused view
 function getActiveViewId() {
-  // Try to find which input is focused
+  // First priority: active drag target set by auto-activation during drag
+  if (window.activeDragTargetView) {
+    console.log(`🎯 Found active drag target: ${window.activeDragTargetView}`);
+    return window.activeDragTargetView;
+  }
+  
+  // Second priority: current active view set by hover
+  if (window.currentActiveView) {
+    console.log(`🎯 Found current active view: ${window.currentActiveView}`);
+    return window.currentActiveView;
+  }
+  
+  // Third priority: try to find which input is focused
   const focusedInput = document.querySelector('.text-input:focus');
   if (focusedInput) {
     const viewId = parseInt(focusedInput.dataset.viewId);
@@ -797,11 +809,11 @@ function getActiveViewId() {
     return viewId;
   }
   
-  // Try to find the view with drag-over class
-  const dragOverView = document.querySelector('.view-panel.drag-over');
-  if (dragOverView) {
-    const viewId = parseInt(dragOverView.dataset.viewId);
-    console.log(`🎯 Found drag-over view: ${viewId}`);
+  // Fourth priority: try to find the view with active-target class
+  const activeView = document.querySelector('.view-panel.active-target');
+  if (activeView) {
+    const viewId = parseInt(activeView.dataset.viewId);
+    console.log(`🎯 Found active-target view: ${viewId}`);
     return viewId;
   }
   
@@ -1041,6 +1053,52 @@ async function readTauriFileContent(filePath, viewId) {
   }
 }
 
+// Function to automatically activate a view (for both hover and drag operations)
+function autoActivateView(viewId, isDragOperation = false) {
+  console.log(`🎯 Auto-activating view ${viewId} ${isDragOperation ? '(drag)' : '(hover)'}`);
+  
+  // Store the currently active view
+  window.currentActiveView = viewId;
+  if (isDragOperation) {
+    window.activeDragTargetView = viewId;
+  }
+  
+  const viewInfo = viewData[viewId];
+  if (viewInfo && viewInfo.textInputEl) {
+    // Focus the input immediately for hover, but not during drag operations
+    if (!isDragOperation) {
+      viewInfo.textInputEl.focus();
+      console.log(`🎯 Immediately focused input for view ${viewId}`);
+    } else {
+      console.log(`🎯 View ${viewId} marked as active drag target`);
+    }
+    
+    // Update visual state of all views
+    document.querySelectorAll('.view-panel').forEach(panel => {
+      const panelViewId = parseInt(panel.dataset.viewId);
+      if (panelViewId === viewId) {
+        panel.classList.add('active-target');
+        if (isDragOperation) {
+          panel.classList.add('drag-active');
+        }
+      } else {
+        panel.classList.remove('active-target', 'drag-active');
+      }
+    });
+  } else {
+    console.warn(`⚠️ Could not activate view ${viewId} - view data not found`);
+  }
+}
+
+// Function to clear active view state
+function clearActiveDragTarget() {
+  console.log('🧹 Clearing active drag target');
+  window.activeDragTargetView = null;
+  document.querySelectorAll('.view-panel').forEach(panel => {
+    panel.classList.remove('active-target', 'drag-active', 'drag-over');
+  });
+}
+
 // Drag and drop handler functions
 function handleDragOver(event) {
   event.preventDefault();
@@ -1063,19 +1121,22 @@ function handleDragEnter(event) {
   event.stopPropagation();
   
   const viewPanel = event.currentTarget;
-  const viewId = viewPanel.dataset.viewId;
+  const viewId = parseInt(viewPanel.dataset.viewId);
   
   console.log(`📬 Drag enter view ${viewId}`);
+  
+  // Auto-activate the view being dragged over (drag operation)
+  autoActivateView(viewId, true);
   
   // Remove drag-over from all other views
   document.querySelectorAll('.view-panel').forEach(panel => {
     if (panel !== viewPanel) {
-      panel.classList.remove('drag-over');
+      panel.classList.remove('drag-over', 'drag-active');
     }
   });
   
   // Add to current view
-  viewPanel.classList.add('drag-over');
+  viewPanel.classList.add('drag-over', 'drag-active');
 }
 
 function handleDragLeave(event) {
@@ -1093,8 +1154,13 @@ function handleDragLeave(event) {
   const y = event.clientY;
   
   if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-    viewPanel.classList.remove('drag-over');
-    console.log(`📫 Removed drag-over from view ${viewId}`);
+    viewPanel.classList.remove('drag-over', 'drag-active', 'active-target');
+    console.log(`📫 Removed drag classes from view ${viewId}`);
+    
+    // If this was the active target, clear it
+    if (window.activeDragTargetView === parseInt(viewId)) {
+      window.activeDragTargetView = null;
+    }
   }
 }
 
@@ -1122,10 +1188,17 @@ function handleDrop(event) {
     });
   }
   
-  // Remove drag over styling from all views
-  document.querySelectorAll('.view-panel').forEach(panel => {
-    panel.classList.remove('drag-over');
-  });
+  // Clear all drag-related styling and state
+  clearActiveDragTarget();
+  
+  // Auto-focus the input of the view that received the drop
+  const viewInfo = viewData[viewId];
+  if (viewInfo && viewInfo.textInputEl) {
+    setTimeout(() => {
+      viewInfo.textInputEl.focus();
+      console.log(`🎯 Auto-focused input for view ${viewId} after drop`);
+    }, 100);
+  }
   
   console.log(`✅ Drop handling complete for view ${viewId}`);
 }
@@ -1141,10 +1214,8 @@ function setupGlobalDragDropMonitoring() {
   
   document.addEventListener('dragend', (e) => {
     console.log('🏁 Global drag end detected');
-    // Clean up any lingering drag-over classes
-    document.querySelectorAll('.drag-over').forEach(el => {
-      el.classList.remove('drag-over');
-    });
+    // Clean up all drag-related state and styling
+    clearActiveDragTarget();
   });
   
   document.addEventListener('dragover', (e) => {
@@ -1154,10 +1225,8 @@ function setupGlobalDragDropMonitoring() {
   
   document.addEventListener('drop', (e) => {
     console.log('📦 Global drop detected');
-    // Clean up any lingering drag-over classes
-    document.querySelectorAll('.drag-over').forEach(el => {
-      el.classList.remove('drag-over');
-    });
+    // Clean up all drag-related state and styling
+    clearActiveDragTarget();
   });
   
   console.log('🌍 Global drag and drop event listeners added');
@@ -1185,12 +1254,26 @@ function setupDragAndDropListeners(viewId) {
   viewPanel.addEventListener('dragleave', handleDragLeave, false);
   viewPanel.addEventListener('drop', handleDrop, false);
   
+  // Add immediate hover activation listeners
+  viewPanel.addEventListener('mouseenter', (e) => {
+    console.log(`🐭 Mouse enter view ${viewId}`);
+    autoActivateView(viewId, false);
+  }, false);
+  
+  viewPanel.addEventListener('mouseleave', (e) => {
+    console.log(`🐭 Mouse leave view ${viewId}`);
+    // Optional: could remove active state when mouse leaves
+    // For now, keep the view active for better UX
+  }, false);
+  
   // Make the view panel accept drops
   viewPanel.style.position = 'relative';
   
   // Add test click handler for debugging
   viewPanel.addEventListener('click', (e) => {
     console.log(`View panel ${viewId} clicked - event listeners are working!`);
+    // Ensure the view is activated on click as well
+    autoActivateView(viewId, false);
   });
   
   console.log(`✅ Drag and drop setup complete for view-${viewId}`);
@@ -1249,6 +1332,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   console.log('🔧 Initializing first view...');
   initializeView(1);
   console.log('✅ First view initialized');
+  
+  // Auto-activate the first view on startup
+  console.log('🎯 Setting first view as active...');
+  autoActivateView(1, false);
+  console.log('✅ First view activated');
   
   // Apply font size to the initial view (using loaded config)
   console.log('🎨 Applying font size...');
