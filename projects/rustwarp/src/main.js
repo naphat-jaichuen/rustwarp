@@ -1699,8 +1699,12 @@ async function setCurrentFolder(dirPath) {
 
 // Function to update the folder display in a view header
 function updateViewFolderDisplay(viewId, folderPath) {
+  console.log(`🔧 updateViewFolderDisplay: viewId=${viewId}, folderPath=${folderPath}`);
+  
   const folderPathElement = document.getElementById(`folder-path-${viewId}`);
   const browseButton = document.getElementById(`browse-btn-${viewId}`);
+  
+  console.log(`🔧 Elements found: folderPathElement=${!!folderPathElement}, browseButton=${!!browseButton}`);
   
   if (folderPathElement) {
     // Show just the folder name, full path in tooltip
@@ -1708,11 +1712,18 @@ function updateViewFolderDisplay(viewId, folderPath) {
     folderPathElement.textContent = folderName;
     folderPathElement.title = `Current folder: ${folderPath}`;
     folderPathElement.style.color = '#4CAF50'; // Green color to indicate it's set
+    console.log(`✅ Updated folder path display: ${folderName}`);
+  } else {
+    console.error(`❌ Could not find folder path element: folder-path-${viewId}`);
   }
   
   if (browseButton) {
     browseButton.disabled = false;
     browseButton.title = `Browse: ${folderPath}`;
+    browseButton.style.opacity = '1'; // Ensure it's visually enabled
+    console.log(`✅ Enabled browse button for view ${viewId}`);
+  } else {
+    console.error(`❌ Could not find browse button: browse-btn-${viewId}`);
   }
   
   // Store the folder path per view
@@ -1720,15 +1731,43 @@ function updateViewFolderDisplay(viewId, folderPath) {
     window.viewFolders = {};
   }
   window.viewFolders[viewId] = folderPath;
+  
+  // Verify the PathManager also has the path
+  const pathManagerPath = window.pathManager.getPath(viewId);
+  console.log(`🔧 PathManager path for view ${viewId}: ${pathManagerPath}`);
 }
 
 // Function to browse the current folder
 function browseCurrentFolder(viewId) {
+  console.log(`🗂️ browseCurrentFolder called for view ${viewId}`);
+  
   try {
-    // Use path manager to get path and trigger browse event
-    const folderPath = window.pathManager.browsePath(viewId);
+    // First try to get path from PathManager
+    let folderPath = window.pathManager.getPath(viewId);
     
-    console.log('Browse folder:', folderPath);
+    // If PathManager doesn't have it, try legacy storage
+    if (!folderPath && window.viewFolders) {
+      folderPath = window.viewFolders[viewId];
+      console.log(`🔧 Using legacy path storage: ${folderPath}`);
+      
+      // If we found it in legacy storage, update PathManager
+      if (folderPath) {
+        window.pathManager.setPath(viewId, folderPath);
+      }
+    }
+    
+    if (!folderPath) {
+      throw new Error('No folder set for this view');
+    }
+    
+    console.log(`🗂️ Browse folder: ${folderPath}`);
+    
+    // Trigger browse event in PathManager
+    window.pathManager.triggerEvent(window.pathManager.events.PATH_BROWSE, {
+      viewId,
+      path: folderPath,
+      timestamp: Date.now()
+    });
     
     // Trigger cross-branch integration for browse functionality
     triggerCrossBranchPathIntegration(viewId, folderPath, 'browse');
@@ -1737,6 +1776,7 @@ function browseCurrentFolder(viewId) {
     addTerminalEntry(`📁 Browsing folder: ${folderPath}`, viewId);
     
   } catch (error) {
+    console.error(`❌ Browse failed for view ${viewId}:`, error);
     addTerminalEntry(`❌ ${error.message}`, viewId);
   }
 }
