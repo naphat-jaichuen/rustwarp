@@ -1,0 +1,428 @@
+[config]
+# Minimum version of cargo-make required
+min_version = "0.36.0"
+
+[config.modify_core_tasks]
+# Enable namespace feature
+namespace = "rustwarp"
+
+[env]
+# Global environment variables
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+RUST_BACKTRACE = { value = "1", condition = { env_not_set = ["RUST_BACKTRACE"] } }
+
+# Project configuration
+SRC_TAURI_DIR = "src-tauri"
+SUBPROCESS_DIR = "subprocess"
+DIST_DIR = "dist"
+EXTENSIONS_DIR = "dist/extensions"
+APP_NAME = "rustwarp"
+
+# Platform specific configurations
+[env.windows]
+BINARY_EXTENSION = ".exe"
+SCRIPT_EXTENSION = ".bat"
+
+[env.linux]
+BINARY_EXTENSION = ""
+SCRIPT_EXTENSION = ".sh"
+
+[env.mac]
+BINARY_EXTENSION = ""
+SCRIPT_EXTENSION = ".sh"
+
+# =============================================================================
+# Main build tasks
+# =============================================================================
+
+[tasks.default]
+alias = "build"
+
+[tasks.build]
+description = "Build the main application and all subprocess binaries"
+dependencies = ["build-subprocesses", "build-main"]
+
+[tasks.build-release]
+description = "Build everything in release mode"
+dependencies = ["build-subprocesses-release", "build-main-release"]
+
+[tasks.build-main]
+description = "Build the main Tauri application"
+cwd = "${SRC_TAURI_DIR}"
+command = "cargo"
+args = ["build"]
+
+[tasks.build-main-release]
+description = "Build the main Tauri application in release mode"
+cwd = "${SRC_TAURI_DIR}"
+command = "cargo"
+args = ["build", "--release"]
+
+[tasks.build-subprocesses]
+description = "Build all subprocess binaries"
+cwd = "${SRC_TAURI_DIR}"
+command = "cargo"
+args = ["build", "--bins"]
+
+[tasks.build-subprocesses-release]
+description = "Build all subprocess binaries in release mode"
+cwd = "${SRC_TAURI_DIR}"
+command = "cargo"
+args = ["build", "--release", "--bins"]
+
+# =============================================================================
+# Tauri specific tasks
+# =============================================================================
+
+[tasks.tauri-dev]
+description = "Run Tauri in development mode"
+cwd = "${SRC_TAURI_DIR}"
+command = "cargo"
+args = ["tauri", "dev"]
+
+[tasks.tauri-build]
+description = "Build Tauri application for production"
+cwd = "${SRC_TAURI_DIR}"
+command = "cargo"
+args = ["tauri", "build"]
+
+[tasks.tauri-build-debug]
+description = "Build Tauri application in debug mode"
+cwd = "${SRC_TAURI_DIR}"
+command = "cargo"
+args = ["tauri", "build", "--debug"]
+
+# =============================================================================
+# Extension management tasks
+# =============================================================================
+
+[tasks.setup-extensions]
+description = "Set up extensions directory structure"
+script_runner = "@shell"
+script = [
+    "mkdir -p ${EXTENSIONS_DIR}",
+    "echo 'Extensions directory created at ${EXTENSIONS_DIR}'"
+]
+
+[tasks.copy-extensions]
+description = "Copy extension binaries to extensions directory"
+dependencies = ["setup-extensions"]
+script_runner = "@shell"
+script = [
+    "echo 'Copying extension binaries...'",
+    "cp ${SRC_TAURI_DIR}/target/debug/findall${BINARY_EXTENSION} ${EXTENSIONS_DIR}/ || echo 'findall not found'",
+    "cp ${SRC_TAURI_DIR}/target/debug/fileops${BINARY_EXTENSION} ${EXTENSIONS_DIR}/ || echo 'fileops not found'",
+    "cp ${SRC_TAURI_DIR}/target/debug/sysinfo${BINARY_EXTENSION} ${EXTENSIONS_DIR}/ || echo 'sysinfo not found'",
+    "echo 'Extension binaries copied'"
+]
+
+[tasks.copy-extensions-release]
+description = "Copy extension binaries (release mode) to extensions directory"
+dependencies = ["setup-extensions"]
+script_runner = "@shell"
+script = [
+    "echo 'Copying extension binaries (release)...'",
+    "cp ${SRC_TAURI_DIR}/target/release/findall${BINARY_EXTENSION} ${EXTENSIONS_DIR}/ || echo 'findall not found'",
+    "cp ${SRC_TAURI_DIR}/target/release/fileops${BINARY_EXTENSION} ${EXTENSIONS_DIR}/ || echo 'fileops not found'",
+    "cp ${SRC_TAURI_DIR}/target/release/sysinfo${BINARY_EXTENSION} ${EXTENSIONS_DIR}/ || echo 'sysinfo not found'",
+    "echo 'Extension binaries (release) copied'"
+]
+
+[tasks.create-extensions-manifest]
+description = "Create extensions manifest file"
+dependencies = ["setup-extensions"]
+script_runner = "@shell"
+script = [
+    '''
+    cat > ${EXTENSIONS_DIR}/extensions.json << 'EOF'
+{
+  "extensions": [
+    {
+      "name": "findall",
+      "version": "0.1.0",
+      "description": "File content search utility with recursive and case-sensitive options",
+      "executable": "findall",
+      "type": "subprocess"
+    },
+    {
+      "name": "fileops",
+      "version": "0.1.0",
+      "description": "File operations utility for copy, move, delete, mkdir, and list operations",
+      "executable": "fileops",
+      "type": "subprocess"
+    },
+    {
+      "name": "sysinfo",
+      "version": "0.1.0",
+      "description": "System information utility displaying CPU, memory, disk, and environment data",
+      "executable": "sysinfo",
+      "type": "subprocess"
+    }
+  ]
+}
+EOF
+    ''',
+    "echo 'Extensions manifest created'"
+]
+
+[tasks.package-extensions]
+description = "Package extensions with manifest"
+dependencies = ["copy-extensions", "create-extensions-manifest"]
+
+[tasks.package-extensions-release]
+description = "Package extensions with manifest (release mode)"
+dependencies = ["copy-extensions-release", "create-extensions-manifest"]
+
+# =============================================================================
+# Post-build tasks
+# =============================================================================
+
+[tasks.post-build]
+description = "Set up extensions alongside main binary (debug)"
+dependencies = ["build", "package-extensions"]
+script_runner = "@shell"
+script = [
+    "echo 'Setting up extensions for debug build...'",
+    "mkdir -p ${SRC_TAURI_DIR}/target/debug/extensions",
+    "cp ${EXTENSIONS_DIR}/* ${SRC_TAURI_DIR}/target/debug/extensions/ || echo 'No extensions to copy'",
+    "echo 'Debug extensions setup complete'"
+]
+
+[tasks.post-build-release]
+description = "Set up extensions alongside main binary (release)"
+dependencies = ["build-release", "package-extensions-release"]
+script_runner = "@shell"
+script = [
+    "echo 'Setting up extensions for release build...'",
+    "mkdir -p ${SRC_TAURI_DIR}/target/release/extensions",
+    "cp ${EXTENSIONS_DIR}/* ${SRC_TAURI_DIR}/target/release/extensions/ || echo 'No extensions to copy'",
+    "echo 'Release extensions setup complete'"
+]
+
+# =============================================================================
+# macOS specific tasks
+# =============================================================================
+
+[tasks.setup-macos-bundle]
+description = "Set up extensions in macOS app bundle"
+condition = { platforms = ["mac"] }
+script_runner = "@shell"
+script = [
+    "echo 'Setting up macOS app bundle extensions...'",
+    "BUNDLE_DIR=${SRC_TAURI_DIR}/target/release/bundle/macos/${APP_NAME}.app",
+    "if [ -d \"$BUNDLE_DIR\" ]; then",
+    "  EXTENSIONS_TARGET=\"$BUNDLE_DIR/Contents/MacOS/extensions\"",
+    "  mkdir -p \"$EXTENSIONS_TARGET\"",
+    "  cp ${EXTENSIONS_DIR}/* \"$EXTENSIONS_TARGET/\" || echo 'No extensions to copy'",
+    "  chmod +x \"$EXTENSIONS_TARGET\"/*",
+    "  echo 'macOS app bundle extensions setup complete'",
+    "else",
+    "  echo 'macOS app bundle not found, skipping...'",
+    "fi"
+]
+
+# =============================================================================
+# Windows specific tasks
+# =============================================================================
+
+[tasks.setup-windows-bundle]
+description = "Set up extensions for Windows distribution"
+condition = { platforms = ["windows"] }
+script_runner = "@shell"
+script = [
+    "echo 'Setting up Windows distribution extensions...'",
+    "BUNDLE_DIR=${SRC_TAURI_DIR}/target/release/bundle/msi",
+    "if [ -d \"$BUNDLE_DIR\" ]; then",
+    "  echo 'Windows bundle found, extensions will be included in installer'",
+    "else",
+    "  echo 'Creating standalone Windows distribution...'",
+    "  mkdir -p dist/windows-standalone",
+    "  cp ${SRC_TAURI_DIR}/target/release/${APP_NAME}.exe dist/windows-standalone/",
+    "  cp -r ${SRC_TAURI_DIR}/target/release/extensions dist/windows-standalone/",
+    "  echo 'Windows standalone distribution created'",
+    "fi"
+]
+
+# =============================================================================
+# Distribution tasks
+# =============================================================================
+
+[tasks.dist]
+description = "Create distribution package"
+dependencies = ["post-build-release"]
+script_runner = "@shell"
+script = [
+    "echo 'Creating distribution package...'",
+    "DIST_PACKAGE=dist/rustwarp-with-extensions",
+    "mkdir -p $DIST_PACKAGE",
+    "cp ${SRC_TAURI_DIR}/target/release/${APP_NAME}${BINARY_EXTENSION} $DIST_PACKAGE/",
+    "cp -r ${SRC_TAURI_DIR}/target/release/extensions $DIST_PACKAGE/",
+    "echo 'Distribution package created at: $DIST_PACKAGE'"
+]
+
+[tasks.dist-mac]
+description = "Create macOS distribution with app bundle"
+condition = { platforms = ["mac"] }
+dependencies = ["tauri-build", "setup-macos-bundle"]
+script_runner = "@shell"
+script = [
+    "echo 'Creating macOS distribution...'",
+    "DIST_MAC=dist/macos",
+    "mkdir -p $DIST_MAC",
+    "cp -r ${SRC_TAURI_DIR}/target/release/bundle/macos/${APP_NAME}.app $DIST_MAC/",
+    "echo 'macOS distribution created at: $DIST_MAC'"
+]
+
+[tasks.dist-windows]
+description = "Create Windows distribution"
+condition = { platforms = ["windows"] }
+dependencies = ["tauri-build", "setup-windows-bundle"]
+
+# =============================================================================
+# Development and testing tasks
+# =============================================================================
+
+[tasks.dev]
+description = "Start development server with hot reload"
+dependencies = ["post-build"]
+run_task = "tauri-dev"
+
+[tasks.test]
+description = "Run all tests"
+command = "cargo"
+args = ["test", "--workspace"]
+
+[tasks.test-extensions]
+description = "Test extension binaries"
+script_runner = "@shell"
+script = [
+    "echo 'Testing extension binaries...'",
+    "${SRC_TAURI_DIR}/target/debug/findall${BINARY_EXTENSION} --help || echo 'findall test failed'",
+    "${SRC_TAURI_DIR}/target/debug/fileops${BINARY_EXTENSION} --help || echo 'fileops test failed'",
+    "${SRC_TAURI_DIR}/target/debug/sysinfo${BINARY_EXTENSION} --help || echo 'sysinfo test failed'",
+    "echo 'Extension tests complete'"
+]
+
+[tasks.check]
+description = "Check code for errors without building"
+command = "cargo"
+args = ["check", "--workspace"]
+
+[tasks.clippy]
+description = "Run Clippy linter"
+command = "cargo"
+args = ["clippy", "--workspace", "--", "-D", "warnings"]
+
+[tasks.fmt]
+description = "Format code"
+command = "cargo"
+args = ["fmt", "--all"]
+
+[tasks.fmt-check]
+description = "Check code formatting"
+command = "cargo"
+args = ["fmt", "--all", "--check"]
+
+# =============================================================================
+# Clean tasks
+# =============================================================================
+
+[tasks.clean]
+description = "Clean build artifacts"
+command = "cargo"
+args = ["clean"]
+
+[tasks.clean-all]
+description = "Clean all build artifacts and distribution files"
+dependencies = ["clean"]
+script_runner = "@shell"
+script = [
+    "echo 'Cleaning distribution files...'",
+    "rm -rf dist/",
+    "echo 'All clean!'"
+]
+
+# =============================================================================
+# Utility tasks
+# =============================================================================
+
+[tasks.info]
+description = "Show project information"
+script_runner = "@shell"
+script = [
+    "echo 'RustWarp Project Information'",
+    "echo '=========================='",
+    "echo \"Main application: rustwarp\"",
+    "echo \"Source directory: src-tauri\"",
+    "echo \"Extensions directory: dist/extensions\"",
+    "echo \"Target platform: $(rustc --version --verbose | grep host | cut -d' ' -f2)\"",
+    "echo \"Binary extension: $(if [[ \"$OSTYPE\" == \"msys\" || \"$OSTYPE\" == \"cygwin\" ]]; then echo '.exe'; else echo '(none)'; fi)\"",
+    "echo ''",
+    "echo 'Available extensions:'",
+    "echo '  - findall: File content search utility'",
+    "echo '  - fileops: File operations utility'",
+    "echo '  - sysinfo: System information utility'",
+    "echo ''",
+    "echo 'Available tasks:'",
+    "echo '  cargo make build          - Build debug version'",
+    "echo '  cargo make build-release  - Build release version'",
+    "echo '  cargo make dev            - Start development server'",
+    "echo '  cargo make dist           - Create distribution package'",
+    "echo '  cargo make test           - Run tests'",
+    "echo '  cargo make clean          - Clean build artifacts'",
+    "echo '  cargo make info           - Show this information'"
+]
+
+[tasks.list-binaries]
+description = "List built binaries"
+script_runner = "@shell"
+script = [
+    "echo 'Built binaries:'",
+    "echo 'Debug builds:'",
+    "ls -la ${SRC_TAURI_DIR}/target/debug/${APP_NAME}${BINARY_EXTENSION} 2>/dev/null || echo '  Main binary not found'",
+    "ls -la ${SRC_TAURI_DIR}/target/debug/findall${BINARY_EXTENSION} 2>/dev/null || echo '  findall not found'",
+    "ls -la ${SRC_TAURI_DIR}/target/debug/fileops${BINARY_EXTENSION} 2>/dev/null || echo '  fileops not found'",
+    "ls -la ${SRC_TAURI_DIR}/target/debug/sysinfo${BINARY_EXTENSION} 2>/dev/null || echo '  sysinfo not found'",
+    "echo ''",
+    "echo 'Release builds:'",
+    "ls -la ${SRC_TAURI_DIR}/target/release/${APP_NAME}${BINARY_EXTENSION} 2>/dev/null || echo '  Main binary not found'",
+    "ls -la ${SRC_TAURI_DIR}/target/release/findall${BINARY_EXTENSION} 2>/dev/null || echo '  findall not found'",
+    "ls -la ${SRC_TAURI_DIR}/target/release/fileops${BINARY_EXTENSION} 2>/dev/null || echo '  fileops not found'",
+    "ls -la ${SRC_TAURI_DIR}/target/release/sysinfo${BINARY_EXTENSION} 2>/dev/null || echo '  sysinfo not found'"
+]
+
+# =============================================================================
+# Composite workflow tasks
+# =============================================================================
+
+[tasks.full-build]
+description = "Complete build workflow with extensions"
+dependencies = ["post-build-release"]
+run_task = "list-binaries"
+
+[tasks.full-dev]
+description = "Complete development workflow"
+dependencies = ["post-build", "test-extensions"]
+run_task = "dev"
+
+[tasks.ci]
+description = "Continuous integration workflow"
+dependencies = ["fmt-check", "clippy", "test", "build-release"]
+
+[tasks.release]
+description = "Full release workflow"
+dependencies = ["ci", "dist"]
+
+# =============================================================================
+# Platform-specific workflows
+# =============================================================================
+
+[tasks.mac-release]
+description = "macOS release workflow"
+condition = { platforms = ["mac"] }
+dependencies = ["ci", "dist-mac"]
+
+[tasks.windows-release]
+description = "Windows release workflow"
+condition = { platforms = ["windows"] }
+dependencies = ["ci", "dist-windows"]
