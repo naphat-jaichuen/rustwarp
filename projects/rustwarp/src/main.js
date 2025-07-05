@@ -292,13 +292,7 @@ function scrollToInput(viewId) {
     requestAnimationFrame(() => {
       terminalOutput.scrollTop = terminalOutput.scrollHeight;
       
-      // Only focus the main input if no search input is currently focused
-      const activeElement = document.activeElement;
-      const isSearchInputFocused = activeElement && activeElement.classList.contains('search-input');
-      
-      if (!isSearchInputFocused) {
-        viewInfo.textInputEl.focus();
-      }
+      // Removed automatic focus - let user manually focus when needed
     });
   }
 }
@@ -473,21 +467,62 @@ function handleGlobalKeydown(event) {
   const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
   const ctrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
   
+  // Check if focus is already on an input field
+  const activeElement = document.activeElement;
+  const isInputFocused = activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA');
+  
+  // Handle font size shortcuts first (these should work even when input is focused)
   if (ctrlOrCmd) {
     if (event.key === '=' || event.key === '+') {
       // Increase font size
       event.preventDefault();
       adjustFontSize(1);
+      return;
     } else if (event.key === '-' || event.key === '_') {
       // Decrease font size
       event.preventDefault();
       adjustFontSize(-1);
+      return;
     } else if (event.key === '0') {
       // Reset to default font size
       event.preventDefault();
       currentFontSize = 13;
       updateTerminalFontSize();
       saveConfig();
+      return;
+    }
+  }
+  
+  // Focus input on any key press (if not already focused on an input)
+  if (!isInputFocused) {
+    // Skip certain special keys that shouldn't trigger focus
+    const skipKeys = ['Tab', 'Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Escape', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'];
+    
+    if (!skipKeys.includes(event.key) && !ctrlOrCmd) {
+      // Focus the active view's input
+      const activeViewId = window.currentActiveView || 1;
+      const viewInfo = viewData[activeViewId];
+      if (viewInfo && viewInfo.textInputEl) {
+        // Don't prevent default here - let the key press go through to the input
+        viewInfo.textInputEl.focus();
+        console.log(`🎯 Key '${event.key}' pressed - focused input for view ${activeViewId}`);
+        
+        // Re-dispatch the key event to the input so the character appears
+        setTimeout(() => {
+          const newEvent = new KeyboardEvent('keydown', {
+            key: event.key,
+            code: event.code,
+            keyCode: event.keyCode,
+            which: event.which,
+            shiftKey: event.shiftKey,
+            ctrlKey: event.ctrlKey,
+            altKey: event.altKey,
+            metaKey: event.metaKey
+          });
+          viewInfo.textInputEl.dispatchEvent(newEvent);
+        }, 0);
+      }
+      return;
     }
   }
 }
@@ -1846,10 +1881,9 @@ function autoActivateView(viewId, isDragOperation = false) {
   
   const viewInfo = viewData[viewId];
   if (viewInfo && viewInfo.textInputEl) {
-    // Focus the input immediately for hover, but not during drag operations
+    // Removed automatic focus - let user manually focus when needed
     if (!isDragOperation) {
-      viewInfo.textInputEl.focus();
-      console.log(`🎯 Immediately focused input for view ${viewId}`);
+      console.log(`🎯 View ${viewId} activated (no auto-focus)`);
     } else {
       console.log(`🎯 View ${viewId} marked as active drag target`);
     }
@@ -1907,7 +1941,10 @@ function handleDragEnter(event) {
   console.log(`📬 Drag enter view ${viewId}`);
   
   // Auto-activate the view being dragged over (drag operation)
+  // This allows switching between views while dragging
   autoActivateView(viewId, true);
+  
+  // Don't focus input during drag - only on drop
   
   // Remove drag-over from all other views
   document.querySelectorAll('.view-panel').forEach(panel => {
@@ -1972,12 +2009,12 @@ function handleDrop(event) {
   // Clear all drag-related styling and state
   clearActiveDragTarget();
   
-  // Auto-focus the input of the view that received the drop
+  // Focus the input of the view that received the drop (commit the selection)
   const viewInfo = viewData[viewId];
   if (viewInfo && viewInfo.textInputEl) {
     setTimeout(() => {
       viewInfo.textInputEl.focus();
-      console.log(`🎯 Auto-focused input for view ${viewId} after drop`);
+      console.log(`🎯 Drop committed - focused input for view ${viewId}`);
     }, 100);
   }
   
@@ -2035,27 +2072,48 @@ function setupDragAndDropListeners(viewId) {
   viewPanel.addEventListener('dragleave', handleDragLeave, false);
   viewPanel.addEventListener('drop', handleDrop, false);
   
-  // Add immediate hover activation listeners
+  // Add click activation listeners (changed from hover)
+  viewPanel.addEventListener('click', (e) => {
+    console.log(`🐭 Mouse click view ${viewId}`);
+    autoActivateView(viewId, false);
+  }, false);
+  
+  // Add mouse down listener to focus input
+  viewPanel.addEventListener('mousedown', (e) => {
+    console.log(`🐭 Mouse down view ${viewId}`);
+    const viewInfo = viewData[viewId];
+    if (viewInfo && viewInfo.textInputEl) {
+      viewInfo.textInputEl.focus();
+      console.log(`🎯 Mouse down - focused input for view ${viewId}`);
+    }
+  }, false);
+  
+  // Add hover listeners to switch views without focusing
   viewPanel.addEventListener('mouseenter', (e) => {
     console.log(`🐭 Mouse enter view ${viewId}`);
-    autoActivateView(viewId, false);
+    // Switch to this view but don't focus input
+    window.currentActiveView = viewId;
+    
+    // Update visual state of all views
+    document.querySelectorAll('.view-panel').forEach(panel => {
+      const panelViewId = parseInt(panel.dataset.viewId);
+      if (panelViewId === viewId) {
+        panel.classList.add('active-target');
+      } else {
+        panel.classList.remove('active-target');
+      }
+    });
+    
+    console.log(`🎯 Hover switched to view ${viewId} (no focus)`);
   }, false);
   
   viewPanel.addEventListener('mouseleave', (e) => {
     console.log(`🐭 Mouse leave view ${viewId}`);
-    // Optional: could remove active state when mouse leaves
-    // For now, keep the view active for better UX
+    // Keep the view active for better UX - don't remove active state on mouse leave
   }, false);
   
   // Make the view panel accept drops
   viewPanel.style.position = 'relative';
-  
-  // Add test click handler for debugging
-  viewPanel.addEventListener('click', (e) => {
-    console.log(`View panel ${viewId} clicked - event listeners are working!`);
-    // Ensure the view is activated on click as well
-    autoActivateView(viewId, false);
-  });
   
   console.log(`✅ Drag and drop setup complete for view-${viewId}`);
   console.log(`📝 Event listeners added: dragover, dragenter, dragleave, drop`);
@@ -2114,10 +2172,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   initializeView(1);
   console.log('✅ First view initialized');
   
-  // Auto-activate the first view on startup
+  // Set the first view as active (but don't auto-focus)
   console.log('🎯 Setting first view as active...');
-  autoActivateView(1, false);
-  console.log('✅ First view activated');
+  window.currentActiveView = 1;
+  document.querySelector('#view-1').classList.add('active-target');
+  console.log('✅ First view activated (no auto-focus)');
   
   // Apply font size to the initial view (using loaded config)
   console.log('🎨 Applying font size...');
