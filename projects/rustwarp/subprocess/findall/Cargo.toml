@@ -1,0 +1,13 @@
+[package]
+name = "findall"
+version = "0.1.0"
+edition = "2021"
+description = "File content search utility with recursive and case-sensitive options"
+authors = ["Naphat J."]
+
+[[bin]]
+name = "findall"
+path = "src/main.rs"
+
+[dependencies]
+# Add any specific dependencies for findall here if needed

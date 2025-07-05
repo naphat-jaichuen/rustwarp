@@ -82,16 +82,51 @@ cargo build
 
 The compiled binaries will be available in `src-tauri/target/debug/` (or `src-tauri/target/release/` for release builds).
 
+## Project Structure
+
+Each subprocess is organized as its own mini-project:
+
+```
+subprocess/
+├── README.md
+├── findall/
+│   ├── Cargo.toml
+│   └── src/
+│       └── main.rs
+├── fileops/
+│   ├── Cargo.toml
+│   └── src/
+│       └── main.rs
+└── sysinfo/
+    ├── Cargo.toml
+    └── src/
+        └── main.rs
+```
+
 ## Adding New Subprocess Binaries
 
-1. Create a new `.rs` file in this directory
-2. Add a `[[bin]]` section to `src-tauri/Cargo.toml`:
+1. Create a new directory: `subprocess/your_binary_name/`
+2. Create `subprocess/your_binary_name/Cargo.toml`:
+   ```toml
+   [package]
+   name = "your_binary_name"
+   version = "0.1.0"
+   edition = "2021"
+   description = "Your binary description"
+   authors = ["Your Name"]
+   
+   [[bin]]
+   name = "your_binary_name"
+   path = "src/main.rs"
+   ```
+3. Create `subprocess/your_binary_name/src/main.rs` with your code
+4. Add a `[[bin]]` section to `src-tauri/Cargo.toml`:
    ```toml
    [[bin]]
    name = "your_binary_name"
-   path = "../subprocess/your_binary_name.rs"
+   path = "../subprocess/your_binary_name/src/main.rs"
    ```
-3. Rebuild the project
+5. Rebuild the project
 
 ## Usage from Main Application
 

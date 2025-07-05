@@ -34,13 +34,13 @@ path = "src/main.rs"
 # Subprocess binaries
 [[bin]]
 name = "findall"
-path = "../subprocess/findall.rs"
+path = "../subprocess/findall/src/main.rs"
 
 [[bin]]
 name = "fileops"
-path = "../subprocess/fileops.rs"
+path = "../subprocess/fileops/src/main.rs"
 
 [[bin]]
 name = "sysinfo"
-path = "../subprocess/sysinfo.rs"
+path = "../subprocess/sysinfo/src/main.rs"
 

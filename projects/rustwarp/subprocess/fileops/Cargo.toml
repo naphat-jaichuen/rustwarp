@@ -1,0 +1,13 @@
+[package]
+name = "fileops"
+version = "0.1.0"
+edition = "2021"
+description = "File operations utility for copy, move, delete, mkdir, and list operations"
+authors = ["Naphat J."]
+
+[[bin]]
+name = "fileops"
+path = "src/main.rs"
+
+[dependencies]
+# Add any specific dependencies for fileops here if needed

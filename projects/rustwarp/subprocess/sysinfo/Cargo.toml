@@ -1,0 +1,13 @@
+[package]
+name = "sysinfo"
+version = "0.1.0"
+edition = "2021"
+description = "System information utility displaying CPU, memory, disk, and environment data"
+authors = ["Naphat J."]
+
+[[bin]]
+name = "sysinfo"
+path = "src/main.rs"
+
+[dependencies]
+# Add any specific dependencies for sysinfo here if needed
