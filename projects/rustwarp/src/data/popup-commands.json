@@ -41,6 +41,18 @@
       "description": "Launch or list CI/CD pipeline",
       "example": "ci compile arch",
       "category": "ci-cd"
+    },
+    {
+      "command": "create",
+      "description": "Create project on the current directory or from zip file",
+      "example": "create jenkins",
+      "category": "project-management"
+    },
+    {
+      "command": "register",
+      "description": "Register the tool on the current directory to the local server",
+      "example": "register jenkins devops/excel-compare",
+      "category": "ci-cd"
     }
   ]
 }
