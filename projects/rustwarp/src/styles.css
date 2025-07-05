@@ -128,26 +128,40 @@
 
 /* Drag and Drop Styles */
 .view-panel.drag-over {
-  background-color: rgba(70, 130, 180, 0.1);
-  border: 2px dashed #4682b4;
+  background-color: rgba(70, 130, 180, 0.2);
+  border: 3px dashed #4682b4;
   transition: all 0.2s ease;
+  box-shadow: 0 0 20px rgba(70, 130, 180, 0.4);
+  transform: scale(1.02);
+}
+
+.view-panel.drag-over .view-header {
+  background-color: rgba(70, 130, 180, 0.3);
 }
 
 .view-panel.drag-over::after {
-  content: '📁 Drop files here';
+  content: '📁 Drop files here → ' attr(data-view-id);
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background-color: rgba(70, 130, 180, 0.9);
+  background-color: rgba(70, 130, 180, 0.95);
   color: white;
-  padding: 1rem 2rem;
-  border-radius: 8px;
-  font-size: 1.2rem;
+  padding: 1.5rem 2.5rem;
+  border-radius: 12px;
+  font-size: 1.3rem;
   font-weight: bold;
   z-index: 1000;
   pointer-events: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  border: 2px solid white;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.05); }
+  100% { transform: translate(-50%, -50%) scale(1); }
 }
 
 .terminal-output {
@@ -194,25 +208,58 @@
 }
 
 .terminal-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 0.75rem;
   margin-bottom: 0.1rem;
-  word-wrap: break-word;
   padding: 0.1rem 0;
   line-height: 1.2;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.terminal-row .row-time {
+.row-time-column {
   color: #888;
   font-size: 0.8em;
-  margin-right: 0.75rem;
   opacity: 0.7;
   font-weight: bold;
-  min-width: 9rem;
-  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 0.5rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
 }
 
-.terminal-row .row-text {
+.row-content-column {
   color: #ffffff;
   font-size: 13px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  padding: 0.2rem 0;
+}
+
+/* File content specific styling */
+.file-content-row {
+  background-color: rgba(0, 50, 100, 0.1);
+}
+
+.file-content-row .row-time-column {
+  background-color: rgba(0, 50, 100, 0.3);
+  color: #aaa;
+}
+
+.row-content-column.file-content {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
+  color: #e6f3ff;
+  background-color: rgba(0, 50, 100, 0.05);
+  padding: 0.3rem 0.5rem;
+  border-radius: 3px;
+  white-space: pre-wrap;
+  overflow-x: auto;
 }
 
 
@@ -393,6 +440,38 @@ button {
 
   .text-input::placeholder {
     color: #aaa;
+  }
+  
+  .row-time-column {
+    background-color: rgba(0, 0, 0, 0.4);
+    border-right-color: rgba(255, 255, 255, 0.2);
+  }
+  
+  .terminal-row {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+  
+  .file-content-row {
+    background-color: rgba(100, 150, 200, 0.08);
+  }
+  
+  .file-content-row .row-time-column {
+    background-color: rgba(100, 150, 200, 0.2);
+  }
+  
+  .row-content-column.file-content {
+    color: #b3d9ff;
+    background-color: rgba(100, 150, 200, 0.05);
+  }
+  
+  .view-panel.drag-over {
+    background-color: rgba(100, 150, 200, 0.25);
+    border-color: #64a0e6;
+    box-shadow: 0 0 25px rgba(100, 160, 230, 0.5);
+  }
+  
+  .view-panel.drag-over .view-header {
+    background-color: rgba(100, 150, 200, 0.4);
   }
   
   .popup-overlay {

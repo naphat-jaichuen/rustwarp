@@ -37,8 +37,8 @@ function initializeViewData(viewId) {
 }
 
 // Function to add a new entry to the terminal-like output
-function addTerminalEntry(text, viewId) {
-  if (!text.trim()) return; // Don't process empty text
+function addTerminalEntry(text, viewId, isFileContent = false) {
+  if (!text.trim() && !isFileContent) return; // Don't process empty text unless it's file content
 
   const viewInfo = viewData[viewId];
   if (!viewInfo) return;
@@ -46,12 +46,12 @@ function addTerminalEntry(text, viewId) {
   viewInfo.rowCounter++;
   const currentTime = new Date().toLocaleString();
 
-  // Create new terminal row
+  // Create new terminal row with column structure
   const terminalRow = document.createElement('div');
-  terminalRow.className = 'terminal-row';
+  terminalRow.className = isFileContent ? 'terminal-row file-content-row' : 'terminal-row';
   terminalRow.innerHTML = `
-    <span class="row-time" style="font-size: ${Math.max(8, currentFontSize - 2)}px;">[${currentTime}]</span>
-    <span class="row-text" style="font-size: ${currentFontSize}px;">${escapeHtml(text)}</span>
+    <div class="row-time-column" style="font-size: ${Math.max(8, currentFontSize - 2)}px;">${currentTime}</div>
+    <div class="row-content-column ${isFileContent ? 'file-content' : ''}" style="font-size: ${currentFontSize}px;">${escapeHtml(text)}</div>
   `;
 
   // Add terminal entry
@@ -231,13 +231,13 @@ function updateTerminalFontSize() {
   });
   
   // Update timestamp font size (slightly smaller)
-  const terminalTimes = document.querySelectorAll('.terminal-row .row-time');
+  const terminalTimes = document.querySelectorAll('.row-time-column');
   terminalTimes.forEach(time => {
     time.style.fontSize = `${Math.max(8, currentFontSize - 2)}px`;
   });
   
   // Update terminal text
-  const terminalTexts = document.querySelectorAll('.terminal-row .row-text');
+  const terminalTexts = document.querySelectorAll('.row-content-column');
   terminalTexts.forEach(text => {
     text.style.fontSize = `${currentFontSize}px`;
   });
@@ -787,25 +787,46 @@ function setupPopupEventListeners(viewId) {
 
 // Tauri File Drop functionality
 
+// Function to get the currently active or focused view
+function getActiveViewId() {
+  // Try to find which input is focused
+  const focusedInput = document.querySelector('.text-input:focus');
+  if (focusedInput) {
+    const viewId = parseInt(focusedInput.dataset.viewId);
+    console.log(`🎯 Found focused view: ${viewId}`);
+    return viewId;
+  }
+  
+  // Try to find the view with drag-over class
+  const dragOverView = document.querySelector('.view-panel.drag-over');
+  if (dragOverView) {
+    const viewId = parseInt(dragOverView.dataset.viewId);
+    console.log(`🎯 Found drag-over view: ${viewId}`);
+    return viewId;
+  }
+  
+  // Fallback to the first view
+  console.log('🎯 No specific view detected, using view 1 as fallback');
+  return 1;
+}
+
 // Function to setup Tauri onDragDropEvent
 function onDragDropEvent(event) {
   console.log('DragDrop event detected:', event);
   
   const files = event.payload.paths || event.payload;
   if (files && files.length > 0) {
-    // For now, add to the first view (view-1)
-    // In the future, we could detect which view was targeted
-    const viewId = 1;
+    // Try to detect which view should receive the files
+    const viewId = getActiveViewId();
+    console.log(`🎯 Tauri drop target: view ${viewId}`);
     
     files.forEach(async (filePath) => {
       const fileName = filePath.split('/').pop() || filePath.split('\\').pop();
       const message = `📁 Dropped file: ${fileName}`;
       addTerminalEntry(message, viewId);
       
-      // Try to read file if it's a text file
-      if (fileName.endsWith('.txt') || fileName.endsWith('.md') || fileName.endsWith('.js') || fileName.endsWith('.json') || fileName.endsWith('.html') || fileName.endsWith('.css')) {
-        await readTauriFileContent(filePath, viewId);
-      }
+      // Try to read file content (function will handle text vs binary detection)
+      await readTauriFileContent(filePath, viewId);
     });
   }
 }
@@ -832,19 +853,17 @@ async function setupTauriFileDropListener() {
         
         const files = event.payload.paths;
         if (files && files.length > 0) {
-          // For now, add to the first view (view-1)
-          // In the future, we could detect which view was targeted
-          const viewId = 1;
+          // Try to detect which view should receive the files
+          const viewId = getActiveViewId();
+          console.log(`🎯 Tauri webview drop target: view ${viewId}`);
           
           files.forEach(async (filePath) => {
             const fileName = filePath.split('/').pop() || filePath.split('\\').pop();
             const message = `📁 Dropped file: ${fileName}`;
             addTerminalEntry(message, viewId);
             
-            // Try to read file if it's a text file
-            if (fileName.endsWith('.txt') || fileName.endsWith('.md') || fileName.endsWith('.js') || fileName.endsWith('.json') || fileName.endsWith('.html') || fileName.endsWith('.css')) {
-              await readTauriFileContent(filePath, viewId);
-            }
+            // Try to read file content (function will handle text vs binary detection)
+            await readTauriFileContent(filePath, viewId);
           });
         }
       } else if (event.payload.type === 'hover') {
@@ -905,23 +924,50 @@ function formatFileSize(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+// Function to check if file is likely text
+function isTextFile(fileName) {
+  const textExtensions = ['.txt', '.md', '.js', '.ts', '.json', '.html', '.css', '.xml', '.yml', '.yaml', '.csv', '.log', '.sh', '.py', '.rb', '.php', '.java', '.cpp', '.c', '.h', '.rs', '.go', '.sql', '.conf', '.ini', '.toml'];
+  const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+  return textExtensions.includes(ext);
+}
+
 // Function to read and display file content
 function readFileContent(file, viewId) {
+  const fileSize = formatFileSize(file.size);
+  
+  // Check if it's likely a text file
+  if (!isTextFile(file.name)) {
+    addTerminalEntry(`📄 ${file.name} (${fileSize}) - Binary file, content not displayed`, viewId);
+    return;
+  }
+  
   const reader = new FileReader();
   
   reader.onload = function(e) {
     const content = e.target.result;
+    
+    // Check if content contains binary data
+    if (content.includes('\0')) {
+      addTerminalEntry(`📄 ${file.name} (${fileSize}) - Binary content detected, not displayed`, viewId);
+      return;
+    }
+    
     const lines = content.split('\n');
+    const lineCount = lines.length;
     
-    // Limit the number of lines displayed to avoid overwhelming the terminal
-    const maxLines = 20;
-    const displayLines = lines.slice(0, maxLines);
+    // Display file info in first row
+    const fileInfo = `📄 ${file.name} (${fileSize}, ${lineCount} lines)`;
+    addTerminalEntry(fileInfo, viewId);
     
-    addTerminalEntry(`📄 Content of ${file.name}:`, viewId);
+    // Add separator
     addTerminalEntry('--- START ---', viewId);
     
+    // Display content with preserved newlines (limit to prevent overwhelming)
+    const maxLines = 50;  // Show more lines since we're preserving formatting
+    const displayLines = lines.slice(0, maxLines);
+    
     displayLines.forEach(line => {
-      addTerminalEntry(line || ' ', viewId); // Show empty lines as single space
+      addTerminalEntry(line || ' ', viewId, true); // Mark as file content and show empty lines as single space
     });
     
     if (lines.length > maxLines) {
@@ -945,21 +991,44 @@ async function readTauriFileContent(filePath, viewId) {
     return;
   }
   
+  const fileName = filePath.split('/').pop() || filePath.split('\\').pop();
+  
+  // Check if it's likely a text file
+  if (!isTextFile(fileName)) {
+    addTerminalEntry(`📄 ${fileName} - Binary file, content not displayed`, viewId);
+    return;
+  }
+  
   try {
     const { readTextFile } = window.__TAURI__.fs;
     const content = await readTextFile(filePath);
+    
+    // Calculate file size in bytes (approximate)
+    const fileSize = new Blob([content]).size;
+    const formattedSize = formatFileSize(fileSize);
+    
+    // Check if content contains binary data
+    if (content.includes('\0')) {
+      addTerminalEntry(`📄 ${fileName} (${formattedSize}) - Binary content detected, not displayed`, viewId);
+      return;
+    }
+    
     const lines = content.split('\n');
+    const lineCount = lines.length;
     
-    // Limit the number of lines displayed to avoid overwhelming the terminal
-    const maxLines = 20;
-    const displayLines = lines.slice(0, maxLines);
+    // Display file info in first row
+    const fileInfo = `📄 ${fileName} (${formattedSize}, ${lineCount} lines)`;
+    addTerminalEntry(fileInfo, viewId);
     
-    const fileName = filePath.split('/').pop() || filePath.split('\\').pop();
-    addTerminalEntry(`📄 Content of ${fileName}:`, viewId);
+    // Add separator
     addTerminalEntry('--- START ---', viewId);
     
+    // Display content with preserved newlines (limit to prevent overwhelming)
+    const maxLines = 50;  // Show more lines since we're preserving formatting
+    const displayLines = lines.slice(0, maxLines);
+    
     displayLines.forEach(line => {
-      addTerminalEntry(line || ' ', viewId); // Show empty lines as single space
+      addTerminalEntry(line || ' ', viewId, true); // Mark as file content and show empty lines as single space
     });
     
     if (lines.length > maxLines) {
@@ -968,7 +1037,6 @@ async function readTauriFileContent(filePath, viewId) {
     
     addTerminalEntry('--- END ---', viewId);
   } catch (error) {
-    const fileName = filePath.split('/').pop() || filePath.split('\\').pop();
     addTerminalEntry(`❌ Error reading file ${fileName}: ${error.message}`, viewId);
   }
 }
@@ -976,38 +1044,123 @@ async function readTauriFileContent(filePath, viewId) {
 // Drag and drop handler functions
 function handleDragOver(event) {
   event.preventDefault();
+  event.stopPropagation();
   event.dataTransfer.dropEffect = 'copy';
+  
+  const viewPanel = event.currentTarget;
+  const viewId = viewPanel.dataset.viewId;
+  
+  console.log(`👋 Drag over view ${viewId}`);
+  
+  // Add visual feedback
+  if (!viewPanel.classList.contains('drag-over')) {
+    viewPanel.classList.add('drag-over');
+  }
+}
+
+function handleDragEnter(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  
+  const viewPanel = event.currentTarget;
+  const viewId = viewPanel.dataset.viewId;
+  
+  console.log(`📬 Drag enter view ${viewId}`);
+  
+  // Remove drag-over from all other views
+  document.querySelectorAll('.view-panel').forEach(panel => {
+    if (panel !== viewPanel) {
+      panel.classList.remove('drag-over');
+    }
+  });
+  
+  // Add to current view
+  viewPanel.classList.add('drag-over');
 }
 
 function handleDragLeave(event) {
-  // Remove drag over styling if needed
-  event.currentTarget.classList.remove('drag-over');
+  event.preventDefault();
+  event.stopPropagation();
+  
+  const viewPanel = event.currentTarget;
+  const viewId = viewPanel.dataset.viewId;
+  
+  console.log(`📫 Drag leave view ${viewId}`);
+  
+  // Only remove drag-over if we're leaving the view panel entirely
+  const rect = viewPanel.getBoundingClientRect();
+  const x = event.clientX;
+  const y = event.clientY;
+  
+  if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+    viewPanel.classList.remove('drag-over');
+    console.log(`📫 Removed drag-over from view ${viewId}`);
+  }
 }
 
 function handleDrop(event) {
   event.preventDefault();
+  event.stopPropagation();
+  
+  const viewPanel = event.currentTarget;
+  const viewId = parseInt(viewPanel.dataset.viewId);
   const files = event.dataTransfer.files;
   
+  console.log(`📦 Drop detected on view ${viewId}`);
+  console.log(`📋 Files dropped: ${files.length}`);
+  
   if (files.length > 0) {
-    // Get the view ID from the closest view panel
-    const viewPanel = event.currentTarget.closest('.view-panel');
-    const viewId = viewPanel ? parseInt(viewPanel.dataset.viewId) : 1;
+    console.log(`🎯 Target view ID: ${viewId}`);
     
-    Array.from(files).forEach(file => {
+    Array.from(files).forEach((file, index) => {
+      console.log(`📄 Processing file ${index + 1}/${files.length}: ${file.name} → view ${viewId}`);
       const message = `📁 Dropped file: ${file.name}`;
       addTerminalEntry(message, viewId);
       
-      // Try to read file if it's a text file
-      if (file.name.endsWith('.txt') || file.name.endsWith('.md') || 
-          file.name.endsWith('.js') || file.name.endsWith('.json') || 
-          file.name.endsWith('.html') || file.name.endsWith('.css')) {
-        readFileContent(file, viewId);
-      }
+      // Try to read file content (function will handle text vs binary detection)
+      readFileContent(file, viewId);
     });
   }
   
-  // Remove drag over styling
-  event.currentTarget.classList.remove('drag-over');
+  // Remove drag over styling from all views
+  document.querySelectorAll('.view-panel').forEach(panel => {
+    panel.classList.remove('drag-over');
+  });
+  
+  console.log(`✅ Drop handling complete for view ${viewId}`);
+}
+
+// Function to setup global drag and drop monitoring
+function setupGlobalDragDropMonitoring() {
+  let dragCounter = 0;
+  
+  document.addEventListener('dragstart', (e) => {
+    console.log('🚀 Global drag start detected');
+    dragCounter++;
+  });
+  
+  document.addEventListener('dragend', (e) => {
+    console.log('🏁 Global drag end detected');
+    // Clean up any lingering drag-over classes
+    document.querySelectorAll('.drag-over').forEach(el => {
+      el.classList.remove('drag-over');
+    });
+  });
+  
+  document.addEventListener('dragover', (e) => {
+    // Prevent default to allow drop
+    e.preventDefault();
+  });
+  
+  document.addEventListener('drop', (e) => {
+    console.log('📦 Global drop detected');
+    // Clean up any lingering drag-over classes
+    document.querySelectorAll('.drag-over').forEach(el => {
+      el.classList.remove('drag-over');
+    });
+  });
+  
+  console.log('🌍 Global drag and drop event listeners added');
 }
 
 // Function to setup drag and drop event listeners for a view
@@ -1020,27 +1173,28 @@ function setupDragAndDropListeners(viewId) {
   
   console.log(`Setting up drag and drop for view-${viewId}`);
   
-  // Add a simple test click handler to verify event listeners work
-  viewPanel.addEventListener('click', (e) => {
-    console.log('View panel clicked - event listeners are working!');
-  });
+  // Remove any existing event listeners to prevent duplicates
+  viewPanel.removeEventListener('dragover', handleDragOver);
+  viewPanel.removeEventListener('dragenter', handleDragEnter);
+  viewPanel.removeEventListener('dragleave', handleDragLeave);
+  viewPanel.removeEventListener('drop', handleDrop);
   
-  // Add drag and drop event listeners
-  viewPanel.addEventListener('dragover', handleDragOver);
-  viewPanel.addEventListener('dragleave', handleDragLeave);
-  viewPanel.addEventListener('drop', handleDrop);
-  
-  // Also try adding dragenter for better compatibility
-  viewPanel.addEventListener('dragenter', (e) => {
-    console.log('Drag enter detected');
-    e.preventDefault();
-    e.currentTarget.classList.add('drag-over');
-  });
+  // Add drag and drop event listeners with improved handling
+  viewPanel.addEventListener('dragover', handleDragOver, false);
+  viewPanel.addEventListener('dragenter', handleDragEnter, false);
+  viewPanel.addEventListener('dragleave', handleDragLeave, false);
+  viewPanel.addEventListener('drop', handleDrop, false);
   
   // Make the view panel accept drops
   viewPanel.style.position = 'relative';
   
-  console.log(`Drag and drop setup complete for view-${viewId}`);
+  // Add test click handler for debugging
+  viewPanel.addEventListener('click', (e) => {
+    console.log(`View panel ${viewId} clicked - event listeners are working!`);
+  });
+  
+  console.log(`✅ Drag and drop setup complete for view-${viewId}`);
+  console.log(`📝 Event listeners added: dragover, dragenter, dragleave, drop`);
 }
 
 // Function to initialize a view with event listeners
@@ -1147,6 +1301,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     setupScrollbarMonitoring();
     console.log('✅ Scrollbar monitoring active');
   }, 500);
+  
+  // Add global drag and drop monitoring for debugging
+  console.log('🔍 Setting up global drag and drop monitoring...');
+  setupGlobalDragDropMonitoring();
+  console.log('✅ Global drag and drop monitoring active');
   
   console.log('🎉 App initialization complete!');
   
