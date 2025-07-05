@@ -575,7 +575,13 @@ function createNewView() {
   const newViewHtml = `
     <div class="view-panel" id="view-${newViewId}" data-view-id="${newViewId}">
       <div class="view-header">
-        <h2>Terminal View ${newViewId}</h2>
+        <div class="view-header-main">
+          <h2>Terminal View ${newViewId}</h2>
+          <div class="current-folder-info">
+            <span class="folder-path" id="folder-path-${newViewId}" title="Current folder">No folder set</span>
+            <button class="browse-btn" id="browse-btn-${newViewId}" onclick="browseCurrentFolder(${newViewId})" title="Browse current folder" disabled>📁</button>
+          </div>
+        </div>
         <button class="close-view-btn" onclick="closeView(${newViewId})" title="Close view">×</button>
       </div>
       
@@ -1486,12 +1492,14 @@ async function setCurrentFolder(dirPath) {
     console.log('Set current folder:', dirPath);
     console.log('Result:', result);
     
-    // You can add additional logic here to update UI or store the current folder
-    // For example, update a global variable or UI indicator
+    // Update global variable
     window.currentFolder = dirPath;
     
-    // Show success message
+    // Get the active view and update its folder display
     const viewId = getActiveViewId();
+    updateViewFolderDisplay(viewId, dirPath);
+    
+    // Show success message
     addTerminalEntry(`✅ Current folder set to: ${dirPath}`, viewId);
     
   } catch (error) {
@@ -1499,6 +1507,52 @@ async function setCurrentFolder(dirPath) {
     const viewId = getActiveViewId();
     addTerminalEntry(`❌ Failed to set current folder: ${error}`, viewId);
   }
+}
+
+// Function to update the folder display in a view header
+function updateViewFolderDisplay(viewId, folderPath) {
+  const folderPathElement = document.getElementById(`folder-path-${viewId}`);
+  const browseButton = document.getElementById(`browse-btn-${viewId}`);
+  
+  if (folderPathElement) {
+    // Show just the folder name, full path in tooltip
+    const folderName = folderPath.split('/').pop() || folderPath.split('\\').pop();
+    folderPathElement.textContent = folderName;
+    folderPathElement.title = `Current folder: ${folderPath}`;
+    folderPathElement.style.color = '#4CAF50'; // Green color to indicate it's set
+  }
+  
+  if (browseButton) {
+    browseButton.disabled = false;
+    browseButton.title = `Browse: ${folderPath}`;
+  }
+  
+  // Store the folder path per view
+  if (!window.viewFolders) {
+    window.viewFolders = {};
+  }
+  window.viewFolders[viewId] = folderPath;
+}
+
+// Function to browse the current folder (placeholder for future implementation)
+function browseCurrentFolder(viewId) {
+  const folderPath = window.viewFolders ? window.viewFolders[viewId] : null;
+  
+  if (!folderPath) {
+    addTerminalEntry('❌ No folder set for this view', viewId);
+    return;
+  }
+  
+  // Placeholder for future browse functionality
+  console.log('Browse folder:', folderPath);
+  addTerminalEntry(`📁 Browse functionality coming soon for: ${folderPath}`, viewId);
+  
+  // TODO: Implement folder browsing functionality
+  // This could:
+  // - Open system file manager
+  // - Show folder contents in expandable view
+  // - Navigate to folder in terminal
+  // - etc.
 }
 
 // Function to handle directory paths

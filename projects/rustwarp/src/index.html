@@ -45,7 +45,13 @@
       <!-- View 1 - Default Table View -->
       <div class="view-panel active" id="view-1" data-view-id="1">
         <div class="view-header">
-          <h2>Terminal View 1</h2>
+          <div class="view-header-main">
+            <h2>Terminal View 1</h2>
+            <div class="current-folder-info">
+              <span class="folder-path" id="folder-path-1" title="Current folder">No folder set</span>
+              <button class="browse-btn" id="browse-btn-1" onclick="browseCurrentFolder(1)" title="Browse current folder" disabled>📁</button>
+            </div>
+          </div>
           <button class="close-view-btn" onclick="closeView(1)" title="Close view">×</button>
         </div>
         
