@@ -101,20 +101,23 @@ function scrollToInput(viewId) {
   // Get the terminal output container and scroll it to bottom
   const terminalOutput = document.getElementById(`terminal-output-${viewId}`);
   if (terminalOutput) {
-    setTimeout(() => {
+    // Use requestAnimationFrame for better performance
+    requestAnimationFrame(() => {
       terminalOutput.scrollTop = terminalOutput.scrollHeight;
       
       // Keep focus on the input
       viewInfo.textInputEl.focus();
-    }, 100); // Small delay to ensure DOM is updated
+    });
   }
 }
 
 // Function to handle Enter key press
 function handleEnterKey(event) {
+  console.log('🔑 Key pressed:', event.key, 'in view:', event.target.dataset.viewId);
   if (event.key === 'Enter') {
     const viewId = parseInt(event.target.dataset.viewId);
     const text = event.target.value.trim();
+    console.log('✅ Enter pressed, text:', text, 'viewId:', viewId);
     if (text) {
       addTerminalEntry(text, viewId);
     }
@@ -143,14 +146,16 @@ async function loadConfig() {
       console.log('⚠️ Invalid font size in config, using default');
       currentFontSize = 13;
       config.fontSize = 13;
-      await saveConfig();
+      // Don't await saveConfig to prevent blocking
+      saveConfig().catch(err => console.log('Failed to save default config:', err));
     }
   } catch (error) {
     console.log('📁 No existing config found, creating default config');
     // Create default config
     config = { fontSize: 13 };
     currentFontSize = 13;
-    await saveConfig();
+    // Don't await saveConfig to prevent blocking
+    saveConfig().catch(err => console.log('Failed to save default config:', err));
     console.log(`✅ Created default config with font size: ${currentFontSize}px`);
   }
 }
@@ -376,17 +381,29 @@ function setupScrollbarMonitoring() {
 
 // Function to create a new view
 function createNewView() {
+  console.log('🔨 Starting createNewView...');
+  
   const viewContainer = document.querySelector('#view-container');
+  console.log('📆 View container found:', !!viewContainer);
+  
+  if (!viewContainer) {
+    console.error('❌ View container not found!');
+    return;
+  }
+  
   const currentViews = viewContainer.children.length;
+  console.log('📈 Current views count:', currentViews, 'Max views:', maxViews);
   
   // Limit to max 2 views
   if (currentViews >= maxViews) {
+    console.log('⚠️ Maximum views reached');
     alert(`Maximum of ${maxViews} views allowed. Please close a view first.`);
     return;
   }
   
   viewCounter++;
   const newViewId = viewCounter;
+  console.log('🆕 Creating new view with ID:', newViewId);
   
   // Add divider before the new view if this is the second view
   if (currentViews === 1) {
@@ -442,20 +459,38 @@ function createNewView() {
   `;
   
   // Add new view to container
+  console.log('📎 Adding new view HTML to container...');
   viewContainer.insertAdjacentHTML('beforeend', newViewHtml);
+  console.log('✅ HTML added to container');
   
   // Initialize view data and event listeners
+  console.log('⚙️ Initializing view data and event listeners...');
   initializeView(newViewId);
+  console.log('✅ View initialized');
   
   // Apply current font size to the new view
+  console.log('🎨 Applying font size to new view...');
   applyFontSizeToView(newViewId);
+  console.log('✅ Font size applied');
   
   // Focus on new view's input
-  viewData[newViewId].textInputEl.focus();
+  console.log('🎯 Focusing on new view input...');
+  if (viewData[newViewId] && viewData[newViewId].textInputEl) {
+    viewData[newViewId].textInputEl.focus();
+    console.log('✅ New view input focused');
+  } else {
+    console.error('❌ Failed to focus on new view input');
+  }
   
   // Resize window for new view count
+  console.log('📄 Calculating new view count...');
   const newViewCount = viewContainer.children.filter(child => child.classList.contains('view-panel')).length;
+  console.log('📈 New view count:', newViewCount);
+  
+  console.log('🗨️ Resizing window for new view count...');
   resizeWindowForViews(newViewCount);
+  
+  console.log('🎉 createNewView completed successfully!');
 }
 
 // Function to setup divider resizing
@@ -938,6 +973,43 @@ async function readTauriFileContent(filePath, viewId) {
   }
 }
 
+// Drag and drop handler functions
+function handleDragOver(event) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'copy';
+}
+
+function handleDragLeave(event) {
+  // Remove drag over styling if needed
+  event.currentTarget.classList.remove('drag-over');
+}
+
+function handleDrop(event) {
+  event.preventDefault();
+  const files = event.dataTransfer.files;
+  
+  if (files.length > 0) {
+    // Get the view ID from the closest view panel
+    const viewPanel = event.currentTarget.closest('.view-panel');
+    const viewId = viewPanel ? parseInt(viewPanel.dataset.viewId) : 1;
+    
+    Array.from(files).forEach(file => {
+      const message = `📁 Dropped file: ${file.name}`;
+      addTerminalEntry(message, viewId);
+      
+      // Try to read file if it's a text file
+      if (file.name.endsWith('.txt') || file.name.endsWith('.md') || 
+          file.name.endsWith('.js') || file.name.endsWith('.json') || 
+          file.name.endsWith('.html') || file.name.endsWith('.css')) {
+        readFileContent(file, viewId);
+      }
+    });
+  }
+  
+  // Remove drag over styling
+  event.currentTarget.classList.remove('drag-over');
+}
+
 // Function to setup drag and drop event listeners for a view
 function setupDragAndDropListeners(viewId) {
   const viewPanel = document.querySelector(`#view-${viewId}`);
@@ -962,6 +1034,7 @@ function setupDragAndDropListeners(viewId) {
   viewPanel.addEventListener('dragenter', (e) => {
     console.log('Drag enter detected');
     e.preventDefault();
+    e.currentTarget.classList.add('drag-over');
   });
   
   // Make the view panel accept drops
@@ -1000,42 +1073,88 @@ function initializeView(viewId) {
 
 // Function to handle floating button click
 function handleFloatingButtonClick() {
-  createNewView();
+  console.log('➕ Floating button clicked!');
+  try {
+    createNewView();
+    console.log('✅ createNewView completed successfully');
+  } catch (error) {
+    console.error('❌ Error in createNewView:', error);
+  }
 }
 
 // Initialize the app when DOM is loaded
 window.addEventListener("DOMContentLoaded", async () => {
+  console.log('🚀 App initializing...');
+  
   // Load configuration first to get saved font size
+  console.log('📋 Loading config...');
   await loadConfig();
+  console.log('✅ Config loaded');
   
   // Initialize first view
+  console.log('🔧 Initializing first view...');
   initializeView(1);
+  console.log('✅ First view initialized');
   
   // Apply font size to the initial view (using loaded config)
+  console.log('🎨 Applying font size...');
   applyFontSizeToView(1);
+  console.log('✅ Font size applied');
   
-  // Setup Tauri file drop listener
-  setupTauriFileDropListener();
+  // Setup Tauri file drop listener (non-blocking)
+  console.log('📁 Setting up file drop listener...');
+  setTimeout(() => {
+    setupTauriFileDropListener();
+    console.log('✅ File drop listener setup complete');
+  }, 100);
   
   // Bind onDragDropEvent to window for additional access
   window.onDragDropEvent = onDragDropEvent;
-  console.log('onDragDropEvent bound to window');
+  console.log('✅ onDragDropEvent bound to window');
   
   // Add event listener for floating button
+  console.log('➕ Setting up floating button...');
   const floatingAddBtnEl = document.querySelector("#floating-add-btn");
-  floatingAddBtnEl.addEventListener("click", handleFloatingButtonClick);
+  if (floatingAddBtnEl) {
+    floatingAddBtnEl.addEventListener("click", handleFloatingButtonClick);
+    console.log('✅ Floating button listener added');
+  } else {
+    console.error('❌ Floating button element not found!');
+  }
   
   // Add global keyboard shortcuts for font size adjustment
+  console.log('⌨️ Setting up keyboard shortcuts...');
   document.addEventListener('keydown', handleGlobalKeydown);
+  console.log('✅ Keyboard shortcuts enabled');
   
   // Focus on first view's input when page loads
-  viewData[1].textInputEl.focus();
+  console.log('🎯 Focusing on input...');
+  if (viewData[1] && viewData[1].textInputEl) {
+    viewData[1].textInputEl.focus();
+    console.log('✅ Input focused');
+  } else {
+    console.error('❌ Failed to focus on input - viewData or textInputEl not found');
+  }
   
   // Set initial layout
+  console.log('🎛️ Setting initial layout...');
   updateViewLayout();
+  console.log('✅ Layout set');
   
-  // Setup scrollbar monitoring for auto-expansion
-  setupScrollbarMonitoring();
+  // Setup scrollbar monitoring for auto-expansion (delayed)
+  console.log('📏 Setting up scrollbar monitoring...');
+  setTimeout(() => {
+    setupScrollbarMonitoring();
+    console.log('✅ Scrollbar monitoring active');
+  }, 500);
+  
+  console.log('🎉 App initialization complete!');
+  
+  // Test responsiveness
+  console.log('🧪 Testing basic responsiveness...');
+  setTimeout(() => {
+    console.log('⏰ Timer test: App is responsive after 1 second');
+  }, 1000);
 });
 
 // Make functions global so they can be called from HTML
