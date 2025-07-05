@@ -1185,7 +1185,7 @@ const languagePresets = {
 function getLanguagePreset(fileName) {
   const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
   return languagePresets[ext] || { 
-    name: 'Unknown', 
+    name: 'Text File', 
     icon: '📄', 
     color: '#6C6C6C', 
     bgColor: 'rgba(108, 108, 108, 0.05)',
@@ -1193,10 +1193,36 @@ function getLanguagePreset(fileName) {
   };
 }
 
+// Common binary file extensions that should never be treated as text
+const binaryExtensions = new Set([
+  '.exe', '.bin', '.dll', '.so', '.dylib', '.app',
+  '.zip', '.tar', '.gz', '.bz2', '.7z', '.rar', '.xz',
+  '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.ico', '.tiff', '.webp',
+  '.mp3', '.mp4', '.avi', '.mov', '.mkv', '.wav', '.flac', '.ogg',
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  '.ttf', '.otf', '.woff', '.woff2', '.eot',
+  '.jar', '.war', '.ear', '.deb', '.rpm', '.dmg', '.pkg', '.msi',
+  '.o', '.obj', '.lib', '.a', '.class', '.pyc', '.pyo'
+]);
+
 // Function to check if file is likely text
 function isTextFile(fileName) {
-  const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
-  return languagePresets.hasOwnProperty(ext);
+  // If no extension, treat as text (common for config files, scripts, etc.)
+  const lastDotIndex = fileName.lastIndexOf('.');
+  if (lastDotIndex === -1) {
+    return true;
+  }
+  
+  const ext = fileName.toLowerCase().substring(lastDotIndex);
+  
+  // If it's a known binary extension, don't treat as text
+  if (binaryExtensions.has(ext)) {
+    return false;
+  }
+  
+  // For all other extensions (known and unknown), treat as text
+  // This includes files in languagePresets and any unknown text-like extensions
+  return true;
 }
 
 // Search functionality for file content
