@@ -2,6 +2,9 @@ use std::path::Path;
 use std::fs;
 use base64::{Engine as _, engine::general_purpose};
 
+mod extensions;
+use extensions::{ExtensionManager, get_available_extensions, execute_extension_command, check_extension_exists};
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -92,10 +95,25 @@ fn read_image_file(path: &str) -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize extension manager
+    let extension_manager = ExtensionManager::new().unwrap_or_else(|e| {
+        eprintln!("Warning: Failed to initialize extension manager: {}", e);
+        ExtensionManager::empty()
+    });
+    
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
-        .invoke_handler(tauri::generate_handler![greet, is_directory, handle_directory, read_image_file])
+        .manage(extension_manager)
+        .invoke_handler(tauri::generate_handler![
+            greet, 
+            is_directory, 
+            handle_directory, 
+            read_image_file,
+            get_available_extensions,
+            execute_extension_command,
+            check_extension_exists
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

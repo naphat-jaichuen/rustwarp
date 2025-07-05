@@ -15,6 +15,7 @@ NC='\033[0m' # No Color
 SRC_TAURI_DIR="src-tauri"
 SUBPROCESS_DIR="subprocess"
 DIST_DIR="dist/subprocess"
+EXTENSIONS_DIR="dist/extensions"
 
 echo -e "${YELLOW}Building subprocess binaries...${NC}"
 
@@ -42,12 +43,17 @@ while [[ $# -gt 0 ]]; do
             COPY_TO_DIST=true
             shift
             ;;
+        --extensions)
+            COPY_TO_EXTENSIONS=true
+            shift
+            ;;
         --help)
-            echo "Usage: $0 [--release|--debug] [--copy] [--help]"
-            echo "  --release: Build in release mode (optimized)"
-            echo "  --debug:   Build in debug mode (default)"
-            echo "  --copy:    Copy binaries to dist directory"
-            echo "  --help:    Show this help message"
+            echo "Usage: $0 [--release|--debug] [--copy] [--extensions] [--help]"
+            echo "  --release:    Build in release mode (optimized)"
+            echo "  --debug:      Build in debug mode (default)"
+            echo "  --copy:       Copy binaries to dist directory"
+            echo "  --extensions: Copy binaries to extensions directory for bundling"
+            echo "  --help:       Show this help message"
             exit 0
             ;;
         *)
@@ -106,6 +112,59 @@ if [[ "$COPY_TO_DIST" == "true" ]]; then
     fi
     
     echo -e "${GREEN}Distribution ready in $DIST_DIR/${NC}"
+fi
+
+# Copy binaries to extensions directory if requested
+if [[ "$COPY_TO_EXTENSIONS" == "true" ]]; then
+    echo -e "${YELLOW}Copying binaries to extensions directory for bundling...${NC}"
+    
+    # Go back to project root if not already there
+    if [[ "$(basename "$(pwd)")" == "src-tauri" ]]; then
+        cd ..
+    fi
+    
+    # Create extensions directory
+    mkdir -p "$EXTENSIONS_DIR"
+    
+    # Copy binaries
+    for binary in findall fileops sysinfo; do
+        if [[ -f "$SRC_TAURI_DIR/$BINARY_DIR/$binary" ]]; then
+            cp "$SRC_TAURI_DIR/$BINARY_DIR/$binary" "$EXTENSIONS_DIR/"
+            echo -e "  ${GREEN}✓${NC} Copied $binary to extensions"
+        fi
+    done
+    
+    # Create extension manifest
+    cat > "$EXTENSIONS_DIR/extensions.json" << EOF
+{
+  "extensions": [
+    {
+      "name": "findall",
+      "version": "0.1.0",
+      "description": "File content search utility with recursive and case-sensitive options",
+      "executable": "findall",
+      "type": "subprocess"
+    },
+    {
+      "name": "fileops",
+      "version": "0.1.0",
+      "description": "File operations utility for copy, move, delete, mkdir, and list operations",
+      "executable": "fileops",
+      "type": "subprocess"
+    },
+    {
+      "name": "sysinfo",
+      "version": "0.1.0",
+      "description": "System information utility displaying CPU, memory, disk, and environment data",
+      "executable": "sysinfo",
+      "type": "subprocess"
+    }
+  ]
+}
+EOF
+    echo -e "  ${GREEN}✓${NC} Created extensions manifest"
+    
+    echo -e "${GREEN}Extensions ready for bundling in $EXTENSIONS_DIR/${NC}"
 fi
 
 echo -e "${GREEN}Done!${NC}"
