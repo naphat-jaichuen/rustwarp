@@ -92,14 +92,30 @@ function addTerminalEntry(text, viewId, isFileContent = false, expandableContent
         `<span class="lang-icon">${langPreset.icon}</span> ${expandableContent.title || 'Buffer Content'} <span class="lang-name" style="color: ${langPreset.color}; font-size: 0.8em; opacity: 0.7;">${langPreset.name}</span> ${syntaxHighlightingBadge}` :
         expandableContent.title || 'Buffer Content';
       
+      const searchId = `search-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const contentId = `content-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
       expandableDiv.innerHTML = `
         <div class="expandable-buffer">
           <div class="buffer-header">
-            <span class="buffer-title">${headerContent}</span>
-            <span class="buffer-info">${expandableContent.lines || 0} lines, ${expandableContent.size || 'unknown size'}</span>
+            <div class="buffer-title-row">
+              <span class="buffer-title">${headerContent}</span>
+              <span class="buffer-info">${expandableContent.lines || 0} lines, ${expandableContent.size || 'unknown size'}</span>
+            </div>
+            <div class="buffer-search-row">
+              <div class="search-container">
+                <input type="text" id="${searchId}" class="search-input" placeholder="Search in file..." />
+                <button class="search-clear" onclick="clearFileSearch('${searchId}', '${contentId}')" title="Clear search">✕</button>
+                <span class="search-results" id="${searchId}-results"></span>
+                <div class="search-nav">
+                  <button class="search-prev" onclick="navigateSearch('${searchId}', '${contentId}', -1)" title="Previous match">↑</button>
+                  <button class="search-next" onclick="navigateSearch('${searchId}', '${contentId}', 1)" title="Next match">↓</button>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="buffer-content ${langClass}" style="${contentStyle}">
-            <pre><code class="language-${langPreset ? langPreset.prismLang || 'text' : 'text'}">${escapeHtml(expandableContent.content)}</code></pre>
+          <div class="buffer-content ${langClass}" style="${contentStyle}" id="${contentId}">
+            <pre><code class="language-${langPreset ? langPreset.prismLang || 'text' : 'text'}" data-original-content="${escapeHtml(expandableContent.content)}">${escapeHtml(expandableContent.content)}</code></pre>
           </div>
         </div>
       `;
@@ -112,6 +128,9 @@ function addTerminalEntry(text, viewId, isFileContent = false, expandableContent
             window.Prism.highlightElement(code);
           });
         }
+        
+        // Setup search functionality
+        setupFileSearch(searchId, contentId);
       }, 10);
     } else if (expandableContent.type === 'output') {
       expandableDiv.innerHTML = `
@@ -135,8 +154,12 @@ function addTerminalEntry(text, viewId, isFileContent = false, expandableContent
   // Update row count
   updateRowCount(viewId);
 
-  // Clear input
-  viewInfo.textInputEl.value = '';
+  // Clear input only if it's the main input that's focused
+  const activeElement = document.activeElement;
+  const isMainInputFocused = activeElement === viewInfo.textInputEl;
+  if (isMainInputFocused) {
+    viewInfo.textInputEl.value = '';
+  }
 
   // Auto-scroll to keep input visible
   scrollToInput(viewId);
@@ -186,6 +209,16 @@ function toggleRowContent(rowId) {
         });
       }
       
+      // Re-setup search functionality if it exists
+      const searchInputs = expandableDiv.querySelectorAll('.search-input');
+      searchInputs.forEach(input => {
+        if (input.id) {
+          const searchId = input.id;
+          const contentId = searchId.replace('search-', 'content-');
+          setupFileSearch(searchId, contentId);
+        }
+      });
+      
       // Auto-scroll to keep the expanded content visible
       expandableDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }, 100);
@@ -221,14 +254,25 @@ function scrollToInput(viewId) {
     requestAnimationFrame(() => {
       terminalOutput.scrollTop = terminalOutput.scrollHeight;
       
-      // Keep focus on the input
-      viewInfo.textInputEl.focus();
+      // Only focus the main input if no search input is currently focused
+      const activeElement = document.activeElement;
+      const isSearchInputFocused = activeElement && activeElement.classList.contains('search-input');
+      
+      if (!isSearchInputFocused) {
+        viewInfo.textInputEl.focus();
+      }
     });
   }
 }
 
 // Function to handle Enter key press
 function handleEnterKey(event) {
+  // Don't handle if a search input is currently focused
+  const activeElement = document.activeElement;
+  if (activeElement && activeElement.classList.contains('search-input')) {
+    return;
+  }
+  
   console.log('🔑 Key pressed:', event.key, 'in view:', event.target.dataset.viewId);
   if (event.key === 'Enter') {
     const viewId = parseInt(event.target.dataset.viewId);
@@ -1153,6 +1197,201 @@ function getLanguagePreset(fileName) {
 function isTextFile(fileName) {
   const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
   return languagePresets.hasOwnProperty(ext);
+}
+
+// Search functionality for file content
+let searchState = {}; // Global search state
+
+function setupFileSearch(searchId, contentId) {
+  const searchInput = document.getElementById(searchId);
+  const contentElement = document.getElementById(contentId);
+  
+  if (!searchInput || !contentElement) return;
+  
+  // Initialize search state
+  searchState[searchId] = {
+    currentMatch: 0,
+    totalMatches: 0,
+    originalContent: null,
+    contentElement: contentElement
+  };
+  
+  // Add search event listener
+  searchInput.addEventListener('input', (e) => {
+    performFileSearch(searchId, contentId, e.target.value);
+  });
+  
+  // Prevent the main input from stealing focus when search is active
+  searchInput.addEventListener('focus', (e) => {
+    e.stopPropagation();
+    console.log('🔍 Search input focused');
+  });
+  
+  searchInput.addEventListener('blur', (e) => {
+    console.log('🔍 Search input blurred');
+  });
+  
+  // Handle click events to ensure proper focus
+  searchInput.addEventListener('click', (e) => {
+    e.stopPropagation();
+    searchInput.focus();
+    console.log('🔍 Search input clicked and focused');
+  });
+  
+  // Prevent parent elements from interfering
+  searchInput.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+  });
+  
+  // Add keyboard shortcuts
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      navigateSearch(searchId, contentId, e.shiftKey ? -1 : 1);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      clearFileSearch(searchId, contentId);
+    } else if ((e.ctrlKey || e.metaKey) && e.key === 'g') {
+      e.preventDefault();
+      navigateSearch(searchId, contentId, e.shiftKey ? -1 : 1);
+    }
+  });
+}
+
+function performFileSearch(searchId, contentId, query) {
+  const contentElement = document.getElementById(contentId);
+  const resultsElement = document.getElementById(`${searchId}-results`);
+  const codeElement = contentElement.querySelector('code');
+  
+  if (!contentElement || !codeElement) return;
+  
+  // Store original content if not already stored
+  if (!searchState[searchId].originalContent) {
+    searchState[searchId].originalContent = codeElement.dataset.originalContent || codeElement.textContent;
+  }
+  
+  const originalContent = searchState[searchId].originalContent;
+  
+  if (!query.trim()) {
+    // Clear search - restore original content
+    codeElement.innerHTML = escapeHtml(originalContent);
+    resultsElement.textContent = '';
+    searchState[searchId].currentMatch = 0;
+    searchState[searchId].totalMatches = 0;
+    
+    // Re-apply syntax highlighting
+    setTimeout(() => {
+      if (window.Prism) {
+        window.Prism.highlightElement(codeElement);
+      }
+    }, 10);
+    return;
+  }
+  
+  // Perform case-insensitive search
+  const regex = new RegExp(escapeRegExp(query), 'gi');
+  const matches = [...originalContent.matchAll(regex)];
+  
+  searchState[searchId].totalMatches = matches.length;
+  searchState[searchId].currentMatch = matches.length > 0 ? 1 : 0;
+  
+  if (matches.length === 0) {
+    resultsElement.textContent = 'No matches';
+    resultsElement.className = 'search-results no-matches';
+    codeElement.innerHTML = escapeHtml(originalContent);
+  } else {
+    resultsElement.textContent = `${searchState[searchId].currentMatch}/${matches.length}`;
+    resultsElement.className = 'search-results has-matches';
+    
+    // Highlight all matches
+    let highlightedContent = originalContent;
+    let offset = 0;
+    
+    matches.forEach((match, index) => {
+      const start = match.index + offset;
+      const end = start + match[0].length;
+      const isCurrentMatch = index === 0; // First match is current by default
+      
+      const highlightClass = isCurrentMatch ? 'search-highlight current-match' : 'search-highlight';
+      const replacement = `<span class="${highlightClass}" data-match-index="${index}">${escapeHtml(match[0])}</span>`;
+      
+      highlightedContent = highlightedContent.slice(0, start) + replacement + highlightedContent.slice(end);
+      offset += replacement.length - match[0].length;
+    });
+    
+    codeElement.innerHTML = highlightedContent;
+    
+    // Scroll to first match
+    scrollToCurrentMatch(contentId);
+  }
+  
+  // Re-apply syntax highlighting while preserving search highlights
+  setTimeout(() => {
+    if (window.Prism && matches.length === 0) {
+      window.Prism.highlightElement(codeElement);
+    }
+  }, 10);
+}
+
+function navigateSearch(searchId, contentId, direction) {
+  const state = searchState[searchId];
+  if (!state || state.totalMatches === 0) return;
+  
+  // Update current match index
+  state.currentMatch += direction;
+  if (state.currentMatch > state.totalMatches) state.currentMatch = 1;
+  if (state.currentMatch < 1) state.currentMatch = state.totalMatches;
+  
+  // Update results display
+  const resultsElement = document.getElementById(`${searchId}-results`);
+  if (resultsElement) {
+    resultsElement.textContent = `${state.currentMatch}/${state.totalMatches}`;
+  }
+  
+  // Update highlighting to show current match
+  const contentElement = document.getElementById(contentId);
+  const allHighlights = contentElement.querySelectorAll('.search-highlight');
+  
+  allHighlights.forEach((highlight, index) => {
+    if (index === state.currentMatch - 1) {
+      highlight.classList.add('current-match');
+    } else {
+      highlight.classList.remove('current-match');
+    }
+  });
+  
+  // Scroll to current match
+  scrollToCurrentMatch(contentId);
+}
+
+function clearFileSearch(searchId, contentId) {
+  const searchInput = document.getElementById(searchId);
+  if (searchInput) {
+    searchInput.value = '';
+    performFileSearch(searchId, contentId, '');
+    // Ensure focus stays on search input after clearing
+    setTimeout(() => {
+      searchInput.focus();
+    }, 10);
+  }
+}
+
+function scrollToCurrentMatch(contentId) {
+  const contentElement = document.getElementById(contentId);
+  const currentMatch = contentElement.querySelector('.search-highlight.current-match');
+  
+  if (currentMatch) {
+    currentMatch.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+      inline: 'nearest'
+    });
+  }
+}
+
+// Helper function to escape regex special characters
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // Function to read and display file content
