@@ -142,28 +142,7 @@ function addTerminalEntry(text, viewId, isFileContent = false, expandableContent
           <div class="output-content">${escapeHtml(expandableContent.content)}</div>
         </div>
       `;
-    } else if (expandableContent.type === 'directory') {
-      const actionId = `action-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      expandableDiv.innerHTML = `
-        <div class="expandable-directory">
-          <div class="directory-header">
-            <span class="directory-title">📁 ${expandableContent.title || 'Directory'}</span>
-            <span class="directory-path">${expandableContent.path}</span>
-          </div>
-          <div class="directory-result">${escapeHtml(expandableContent.result)}</div>
-          <div class="directory-actions">
-            <button id="${actionId}" class="directory-action-btn" 
-                    onclick="handleDirectoryAction('${escapeHtml(expandableContent.path)}')"
-                    title="Send directory path to Rust function">
-              🚀 Process Directory
-            </button>
-            <span class="directory-path-display">Absolute path: <code>${expandableContent.path}</code></span>
-          </div>
-        </div>
-      `;
     }
-    
     terminalRow.appendChild(expandableDiv);
   }
 
@@ -1491,8 +1470,8 @@ function readFileContent(file, viewId) {
   reader.readAsText(file);
 }
 
-// Function to handle directory action button click
-async function handleDirectoryAction(dirPath) {
+// Function to set current folder
+async function setCurrentFolder(dirPath) {
   if (!window.__TAURI__) {
     alert('Tauri not available');
     return;
@@ -1501,20 +1480,24 @@ async function handleDirectoryAction(dirPath) {
   try {
     const { invoke } = window.__TAURI__.core;
     
-    // Call the Rust function with the directory path
+    // Call the Rust function to set the current directory
     const result = await invoke('handle_directory', { path: dirPath });
     
-    // You can customize this to do whatever you want with the result
-    // For now, we'll show an alert and also log to console
-    console.log('Directory action result:', result);
-    alert(`Directory action completed:\n\n${result}`);
+    console.log('Set current folder:', dirPath);
+    console.log('Result:', result);
     
-    // Optionally, you could add a terminal entry to show the result
-    // addTerminalEntry(`✅ Directory action: ${result}`, getActiveViewId());
+    // You can add additional logic here to update UI or store the current folder
+    // For example, update a global variable or UI indicator
+    window.currentFolder = dirPath;
+    
+    // Show success message
+    const viewId = getActiveViewId();
+    addTerminalEntry(`✅ Current folder set to: ${dirPath}`, viewId);
     
   } catch (error) {
-    console.error('Directory action failed:', error);
-    alert(`Directory action failed: ${error}`);
+    console.error('Failed to set current folder:', error);
+    const viewId = getActiveViewId();
+    addTerminalEntry(`❌ Failed to set current folder: ${error}`, viewId);
   }
 }
 
@@ -1527,25 +1510,12 @@ async function handleTauriDirectory(dirPath, viewId) {
   
   const dirName = dirPath.split('/').pop() || dirPath.split('\\').pop();
   
-  try {
-    const { invoke } = window.__TAURI__.core;
-    const result = await invoke('handle_directory', { path: dirPath });
-    
-    // Create expandable content for directory
-    const directoryContent = {
-      type: 'directory',
-      title: `Directory: ${dirName}`,
-      dirName: dirName,
-      path: dirPath,
-      result: result
-    };
-    
-    // Display directory info with expandable content and action button
-    const dirInfo = `📁 ${dirName} - Directory`;
-    addTerminalEntry(dirInfo, viewId, false, directoryContent);
-  } catch (error) {
-    addTerminalEntry(`❌ Error processing directory ${dirName}: ${error}`, viewId);
-  }
+  // Create a simple button to set the current folder
+  const setFolderButton = `<button class="set-folder-btn" onclick="setCurrentFolder('${escapeHtml(dirPath)}')" title="Set as current folder">📁 Set Current Folder</button>`;
+  const dirInfo = `📁 ${dirName} - ${setFolderButton}`;
+  
+  // Add terminal entry without expandable content
+  addTerminalEntry(dirInfo, viewId, false, null);
 }
 
 // Function to read Tauri file content
