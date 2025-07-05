@@ -308,13 +308,62 @@ function handleEnterKey(event) {
 // Function to load popup data from JSON file
 async function loadPopupData() {
   try {
-    const response = await fetch('./data/popup-commands.json');
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    // First try using Tauri's file system API (preferred for bundled resources)
+    if (window.__TAURI__ && window.__TAURI__.fs) {
+      console.log('🔧 Trying to load popup data using Tauri fs API...');
+      try {
+        const { readTextFile, BaseDirectory } = window.__TAURI__.fs;
+        const fileContent = await readTextFile('data/popup-commands.json', {
+          baseDir: BaseDirectory.Resource
+        });
+        const data = JSON.parse(fileContent);
+        popupData = data.commands;
+        console.log(`✅ Loaded ${popupData.length} command suggestions from Tauri resource`);
+        
+        // Log categories for debugging
+        const categories = [...new Set(popupData.map(cmd => cmd.category))];
+        console.log(`📊 Categories available: ${categories.join(', ')}`);
+        return; // Success, exit function
+      } catch (tauriError) {
+        console.log('⚠️ Tauri fs method failed, falling back to fetch:', tauriError.message);
+      }
     }
+    
+    // Fallback to fetch with multiple potential paths
+    console.log('🌐 Trying to load popup data using fetch...');
+    const possiblePaths = [
+      '/data/popup-commands.json',  // Absolute path from root
+      './data/popup-commands.json', // Relative from current location
+      'data/popup-commands.json',   // Direct relative
+      '/src/data/popup-commands.json' // Full path from root
+    ];
+    
+    let response = null;
+    let usedPath = null;
+    
+    // Try each path until one works
+    for (const path of possiblePaths) {
+      try {
+        console.log(`🔍 Trying to load popup data from: ${path}`);
+        response = await fetch(path);
+        if (response.ok) {
+          usedPath = path;
+          console.log(`✅ Successfully found popup data at: ${path}`);
+          break;
+        }
+      } catch (pathError) {
+        console.log(`❌ Failed to load from ${path}:`, pathError.message);
+        continue;
+      }
+    }
+    
+    if (!response || !response.ok) {
+      throw new Error(`Could not load popup data from any of the tried paths: ${possiblePaths.join(', ')}`);
+    }
+    
     const data = await response.json();
     popupData = data.commands;
-    console.log(`✅ Loaded ${popupData.length} command suggestions from JSON`);
+    console.log(`✅ Loaded ${popupData.length} command suggestions from fetch (${usedPath})`);
     
     // Log categories for debugging
     const categories = [...new Set(popupData.map(cmd => cmd.category))];

@@ -1,130 +1,28 @@
 {
   "commands": [
     {
-      "command": "ls",
-      "description": "List directory contents",
-      "example": "ls -la",
-      "category": "file-system"
-    },
-    {
-      "command": "cd",
-      "description": "Change directory",
-      "example": "cd /home/user",
-      "category": "navigation"
-    },
-    {
-      "command": "pwd",
-      "description": "Print working directory",
-      "example": "pwd",
-      "category": "navigation"
-    },
-    {
-      "command": "mkdir",
-      "description": "Create directory",
-      "example": "mkdir newfolder",
-      "category": "file-system"
-    },
-    {
-      "command": "rm",
-      "description": "Remove files/directories",
-      "example": "rm file.txt",
-      "category": "file-system"
-    },
-    {
-      "command": "cp",
-      "description": "Copy files",
-      "example": "cp file1.txt file2.txt",
-      "category": "file-system"
-    },
-    {
-      "command": "mv",
-      "description": "Move/rename files",
-      "example": "mv old.txt new.txt",
-      "category": "file-system"
-    },
-    {
-      "command": "cat",
-      "description": "Display file contents",
-      "example": "cat file.txt",
-      "category": "file-viewing"
-    },
-    {
-      "command": "grep",
-      "description": "Search text patterns",
-      "example": "grep \"pattern\" file.txt",
-      "category": "text-processing"
-    },
-    {
-      "command": "chmod",
-      "description": "Change file permissions",
-      "example": "chmod 755 script.sh",
-      "category": "file-system"
-    },
-    {
-      "command": "find",
-      "description": "Search for files and directories",
-      "example": "find . -name \"*.txt\"",
+      "command": "findall",
+      "description": "Find in filtered filename or all for a keyword or more from built-in editor in the current directory",
+      "example": "findall in *.c *.h *.sh",
       "category": "file-search"
     },
     {
-      "command": "head",
-      "description": "Display first lines of file",
-      "example": "head -n 10 file.txt",
-      "category": "file-viewing"
+      "command": "get",
+      "description": "Get a file or more from everthing",
+      "example": "get report.xlsx data.cfg",
+      "category": "file-search"
     },
     {
-      "command": "tail",
-      "description": "Display last lines of file",
-      "example": "tail -f logfile.log",
-      "category": "file-viewing"
+      "command": "run",
+      "description": "Run an application or more",
+      "example": " team jira gitlab",
+      "category": "system-app"
     },
     {
-      "command": "less",
-      "description": "View file content with navigation",
-      "example": "less document.txt",
-      "category": "file-viewing"
-    },
-    {
-      "command": "which",
-      "description": "Locate command executable",
-      "example": "which python",
-      "category": "system-info"
-    },
-    {
-      "command": "ps",
-      "description": "Display running processes",
-      "example": "ps aux",
-      "category": "process-management"
-    },
-    {
-      "command": "kill",
-      "description": "Terminate process by PID",
-      "example": "kill 1234",
-      "category": "process-management"
-    },
-    {
-      "command": "top",
-      "description": "Display system processes",
-      "example": "top",
-      "category": "system-monitoring"
-    },
-    {
-      "command": "df",
-      "description": "Display filesystem disk space",
-      "example": "df -h",
-      "category": "system-info"
-    },
-    {
-      "command": "du",
-      "description": "Display directory disk usage",
-      "example": "du -sh folder/",
-      "category": "system-info"
-    },
-    {
-      "command": "tar",
-      "description": "Archive and compress files",
-      "example": "tar -czf archive.tar.gz folder/",
-      "category": "compression"
+      "command": "install",
+      "description": "Install an application",
+      "example": "install python latest",
+      "category": "system-app"
     },
     {
       "command": "zip",
@@ -139,46 +37,10 @@
       "category": "compression"
     },
     {
-      "command": "git",
-      "description": "Git version control",
-      "example": "git status",
-      "category": "version-control"
-    },
-    {
-      "command": "ssh",
-      "description": "Secure shell remote connection",
-      "example": "ssh user@server.com",
-      "category": "network"
-    },
-    {
-      "command": "curl",
-      "description": "Transfer data from servers",
-      "example": "curl -O https://example.com/file.zip",
-      "category": "network"
-    },
-    {
-      "command": "wget",
-      "description": "Download files from web",
-      "example": "wget https://example.com/file.zip",
-      "category": "network"
-    },
-    {
-      "command": "history",
-      "description": "Show command history",
-      "example": "history | grep git",
-      "category": "shell-utilities"
-    },
-    {
-      "command": "alias",
-      "description": "Create command shortcuts",
-      "example": "alias ll='ls -la'",
-      "category": "shell-utilities"
-    },
-    {
-      "command": "echo",
-      "description": "Display text output",
-      "example": "echo \"Hello World\"",
-      "category": "text-processing"
+      "command": "ci",
+      "description": "Launch or list CI/CD pipeline",
+      "example": "ci compile arch",
+      "category": "ci-cd"
     }
   ]
 }
