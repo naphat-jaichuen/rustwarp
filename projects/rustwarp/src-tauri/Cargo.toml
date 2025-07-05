@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Rust Warp with tauri"
 authors = ["Naphat J."]
 edition = "2021"
+default-run = "rustwarp"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -24,4 +25,22 @@ tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.21"
+
+# Main application binary
+[[bin]]
+name = "rustwarp"
+path = "src/main.rs"
+
+# Subprocess binaries
+[[bin]]
+name = "findall"
+path = "../subprocess/findall.rs"
+
+[[bin]]
+name = "fileops"
+path = "../subprocess/fileops.rs"
+
+[[bin]]
+name = "sysinfo"
+path = "../subprocess/sysinfo.rs"
 
