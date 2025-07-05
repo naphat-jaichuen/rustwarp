@@ -1,0 +1,8 @@
+command: unzip
+description: Extract ZIP archives
+example: unzip archive.zip
+category: compression
+subcommands:
+  - "-d"
+  - "-l"
+  - "-o"

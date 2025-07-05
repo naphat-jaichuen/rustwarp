@@ -1,0 +1,9 @@
+command: get
+description: Get a file or more from everything
+example: get report.xlsx data.cfg
+category: file-search
+subcommands:
+  - "*.pdf"
+  - "*.xlsx"
+  - "*.log"
+  - from

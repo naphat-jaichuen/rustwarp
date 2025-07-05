@@ -1307,16 +1307,58 @@ button {
 }
 
 .popup-table tr.selected {
-  background-color: #00ff00;
-  color: #000000;
+  background-color: #646cff;
+  color: #ffffff;
 }
 
 .popup-table tr.selected td {
-  color: #000000;
+  color: #ffffff;
 }
 
 .popup-table tr:last-child td {
   border-bottom: none;
+}
+
+/* Enhanced styles for dynamic popup commands */
+.popup-table .main-command {
+  font-weight: bold;
+  color: #82aaff;
+}
+
+.popup-table .subcommand {
+  color: #c3e88d;
+  font-style: italic;
+  padding-left: 20px;
+}
+
+.popup-table .subcommand::before {
+  content: "└─ ";
+  color: #545454;
+  font-style: normal;
+}
+
+.popup-table tr:hover .main-command {
+  color: #ffffff;
+}
+
+.popup-table tr:hover .subcommand {
+  color: #ffffff;
+}
+
+.popup-table tr.selected .main-command,
+.popup-table tr.selected .subcommand {
+  color: #ffffff;
+}
+
+/* Context indicator for subcommands */
+.popup-context-header {
+  background-color: #333;
+  color: #888;
+  padding: 4px 12px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #444;
 }
 
 /* Set folder button styles */

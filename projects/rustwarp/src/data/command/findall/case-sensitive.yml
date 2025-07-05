@@ -1,0 +1,41 @@
+command: case-sensitive
+description: Perform case-sensitive keyword search
+example: findall case-sensitive Function Class in *.js
+category: file-search
+usage: findall case-sensitive [keyword...] in [pattern...]
+options:
+  - name: keyword
+    type: string
+    description: Keywords to search for (case-sensitive)
+    required: true
+    examples:
+      - "Function"
+      - "Class"
+      - "CONSTANT"
+      - "myVariable"
+      - "getElementById"
+      - "innerHTML"
+      - "addEventListener"
+      - "toString"
+      - "valueOf"
+      - "prototype"
+  - name: pattern
+    type: glob
+    description: File patterns to search within
+    examples:
+      - "*.js *.ts"
+      - "*.py"
+      - "*.java"
+      - "*.cpp *.h"
+      - "*.rb"
+flags:
+  - name: whole-word
+    description: Match whole words only
+    short: w
+  - name: line-numbers
+    description: Show line numbers in results
+    short: n
+    default: true
+  - name: recursive
+    description: Search recursively in subdirectories
+    short: r

@@ -1,0 +1,11 @@
+command: install
+description: Install an application
+example: install python latest
+category: system-app
+subcommands:
+  - python
+  - node
+  - rust
+  - docker
+  - latest
+  - stable

@@ -1,0 +1,10 @@
+command: create
+description: Create project on the current directory or from zip file
+example: create jenkins
+category: project-management
+subcommands:
+  - jenkins
+  - react
+  - rust
+  - python
+  - from

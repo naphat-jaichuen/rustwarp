@@ -1,0 +1,36 @@
+command: in
+description: Search for keywords within specific file patterns
+example: findall function variable in *.js *.ts
+category: file-search
+usage: findall [keyword...] in [pattern...]
+options:
+  - name: keyword
+    type: string
+    description: Keywords to search for (space-separated)
+    required: true
+    examples:
+      - "function"
+      - "class"
+      - "import export"
+      - "TODO FIXME"
+      - "async await"
+  - name: pattern
+    type: glob
+    description: File patterns to search within
+    examples:
+      - "*.js *.ts"
+      - "*.py"
+      - "*.{c,h,cpp}"
+      - "*.md *.txt"
+      - "*.yml *.yaml"
+flags:
+  - name: case-sensitive
+    description: Perform case-sensitive search
+    short: c
+  - name: whole-word
+    description: Match whole words only
+    short: w
+  - name: line-numbers
+    description: Show line numbers in results
+    short: n
+    default: true

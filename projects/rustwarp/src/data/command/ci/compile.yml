@@ -1,0 +1,4 @@
+command: compile
+description: Run compilation pipeline
+example: ci compile arch
+category: ci-cd

@@ -1,0 +1,4 @@
+command: "-r"
+description: Recursively compress directories
+example: zip -r archive.zip folder/
+category: compression

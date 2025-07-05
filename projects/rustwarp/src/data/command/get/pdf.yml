@@ -1,0 +1,4 @@
+command: "*.pdf"
+description: Get all PDF files
+example: get *.pdf
+category: file-search

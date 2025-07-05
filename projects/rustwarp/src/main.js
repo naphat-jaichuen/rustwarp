@@ -305,72 +305,192 @@ function handleEnterKey(event) {
   }
 }
 
-// Function to load popup data from JSON file
+// Enhanced YAML parser for our command files
+function parseSimpleYAML(yamlText) {
+  const lines = yamlText.split('\n');
+  const result = {};
+  let currentArray = null;
+  let currentArrayKey = null;
+  
+  for (let line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    
+    const indent = line.length - line.trimStart().length;
+    
+    // Handle key-value pairs (with or without space after colon)
+    if (line.includes(':') && indent === 0) {
+      const colonIndex = line.indexOf(':');
+      const key = line.substring(0, colonIndex).trim();
+      const value = line.substring(colonIndex + 1).trim().replace(/["']/g, '');
+      
+      if (value) {
+        // Simple key-value pair
+        result[key] = value;
+        currentArray = null;
+        currentArrayKey = null;
+      } else {
+        // This is starting an array or object
+        currentArrayKey = key;
+        currentArray = [];
+        result[key] = currentArray;
+      }
+    }
+    // Handle array items
+    else if (trimmed.startsWith('- ') && indent > 0) {
+      const item = trimmed.substring(2).trim().replace(/["']/g, '');
+      // Only add simple string items (skip complex nested items)
+      if (currentArray && currentArrayKey && !item.includes(':')) {
+        currentArray.push(item);
+      }
+    }
+  }
+  
+  return result;
+}
+
+// Function to load popup data from YAML command files
 async function loadPopupData() {
   try {
-    // First try using Tauri's file system API (preferred for bundled resources)
-    if (window.__TAURI__ && window.__TAURI__.fs) {
-      console.log('🔧 Trying to load popup data using Tauri fs API...');
-      try {
-        const { readTextFile, BaseDirectory } = window.__TAURI__.fs;
-        const fileContent = await readTextFile('data/popup-commands.json', {
-          baseDir: BaseDirectory.Resource
-        });
-        const data = JSON.parse(fileContent);
-        popupData = data.commands;
-        console.log(`✅ Loaded ${popupData.length} command suggestions from Tauri resource`);
-        
-        // Log categories for debugging
-        const categories = [...new Set(popupData.map(cmd => cmd.category))];
-        console.log(`📊 Categories available: ${categories.join(', ')}`);
-        return; // Success, exit function
-      } catch (tauriError) {
-        console.log('⚠️ Tauri fs method failed, falling back to fetch:', tauriError.message);
-      }
-    }
+    popupData = [];
     
-    // Fallback to fetch with multiple potential paths
-    console.log('🌐 Trying to load popup data using fetch...');
-    const possiblePaths = [
-      '/data/popup-commands.json',  // Absolute path from root
-      './data/popup-commands.json', // Relative from current location
-      'data/popup-commands.json',   // Direct relative
-      '/src/data/popup-commands.json' // Full path from root
+    // List of main command files to load
+    const mainCommands = [
+      'findall', 'install', 'get', 'run', 'zip', 'unzip', 'ci', 'create', 'register'
     ];
     
-    let response = null;
-    let usedPath = null;
+    console.log('🔧 Loading command data from YAML files...');
     
-    // Try each path until one works
-    for (const path of possiblePaths) {
+    for (const commandName of mainCommands) {
       try {
-        console.log(`🔍 Trying to load popup data from: ${path}`);
-        response = await fetch(path);
-        if (response.ok) {
-          usedPath = path;
-          console.log(`✅ Successfully found popup data at: ${path}`);
-          break;
+        let yamlContent = '';
+        
+        // Try loading with Tauri first
+        if (window.__TAURI__ && window.__TAURI__.fs) {
+          try {
+            const { readTextFile, BaseDirectory } = window.__TAURI__.fs;
+            yamlContent = await readTextFile(`data/command/${commandName}.yml`, {
+              baseDir: BaseDirectory.Resource
+            });
+          } catch (tauriError) {
+            // Fallback to fetch
+            const response = await fetch(`./data/command/${commandName}.yml`);
+            if (response.ok) {
+              yamlContent = await response.text();
+            } else {
+              throw new Error(`Failed to fetch ${commandName}.yml`);
+            }
+          }
+        } else {
+          // Use fetch for development
+          const response = await fetch(`./data/command/${commandName}.yml`);
+          if (response.ok) {
+            yamlContent = await response.text();
+          } else {
+            throw new Error(`Failed to fetch ${commandName}.yml`);
+          }
         }
-      } catch (pathError) {
-        console.log(`❌ Failed to load from ${path}:`, pathError.message);
-        continue;
+        
+        // Parse the YAML content
+        const commandData = parseSimpleYAML(yamlContent);
+        // Convert to popup format
+        const popupCommand = {
+          command: commandData.command || commandName,
+          description: commandData.description || `${commandName} command`,
+          example: commandData.example || `${commandName} ...`,
+          category: commandData.category || 'general'
+        };
+        
+        // Load subcommands if they exist
+        if (commandData.subcommands && Array.isArray(commandData.subcommands)) {
+          console.log(`🔥 ${commandName} has subcommands:`, commandData.subcommands);
+          popupCommand.subcommands = [];
+          
+          for (const subCommandName of commandData.subcommands) {
+            console.log(`🔄 Loading subcommand: ${commandName}/${subCommandName}`);
+            try {
+              let subYamlContent = '';
+              
+              // Handle special characters in filename (like *.pdf -> pdf.yml)
+              let fileName = subCommandName;
+              if (fileName.startsWith('*.')) {
+                fileName = fileName.substring(2); // Remove *.  (*.pdf -> pdf)
+              }
+              if (fileName.startsWith('-')) {
+                fileName = fileName.substring(1); // Remove - (-r -> r)
+              }
+              
+              const filePath = `data/command/${commandName}/${fileName}.yml`;
+              
+              if (window.__TAURI__ && window.__TAURI__.fs) {
+                try {
+                  const { readTextFile, BaseDirectory } = window.__TAURI__.fs;
+                  subYamlContent = await readTextFile(filePath, {
+                    baseDir: BaseDirectory.Resource
+                  });
+                } catch (tauriError) {
+                  const response = await fetch(`./${filePath}`);
+                  if (response.ok) {
+                    subYamlContent = await response.text();
+                  }
+                }
+              } else {
+                const response = await fetch(`./${filePath}`);
+                if (response.ok) {
+                  subYamlContent = await response.text();
+                }
+              }
+              
+              if (subYamlContent) {
+                const subCommandData = parseSimpleYAML(subYamlContent);
+                popupCommand.subcommands.push({
+                  command: subCommandData.command || subCommandName,
+                  description: subCommandData.description || `${subCommandName} subcommand`,
+                  example: subCommandData.example || `${commandName} ${subCommandName}`,
+                  category: subCommandData.category || popupCommand.category
+                });
+              } else {
+                // If no YAML file found, create a basic entry
+                popupCommand.subcommands.push({
+                  command: subCommandName,
+                  description: `${subCommandName} subcommand for ${commandName}`,
+                  example: `${commandName} ${subCommandName}`,
+                  category: popupCommand.category
+                });
+              }
+            } catch (subError) {
+              console.warn(`⚠️ Could not load subcommand ${commandName}/${subCommandName}:`, subError.message);
+              // Add a fallback entry even if loading fails
+              popupCommand.subcommands.push({
+                command: subCommandName,
+                description: `${subCommandName} subcommand for ${commandName}`,
+                example: `${commandName} ${subCommandName}`,
+                category: popupCommand.category
+              });
+            }
+          }
+        }
+        
+        popupData.push(popupCommand);
+        console.log(`✅ Loaded command: ${commandName}`);
+        
+      } catch (commandError) {
+        console.warn(`⚠️ Could not load command ${commandName}:`, commandError.message);
       }
     }
     
-    if (!response || !response.ok) {
-      throw new Error(`Could not load popup data from any of the tried paths: ${possiblePaths.join(', ')}`);
-    }
-    
-    const data = await response.json();
-    popupData = data.commands;
-    console.log(`✅ Loaded ${popupData.length} command suggestions from fetch (${usedPath})`);
+    console.log(`✅ Loaded ${popupData.length} commands from YAML files`);
     
     // Log categories for debugging
     const categories = [...new Set(popupData.map(cmd => cmd.category))];
     console.log(`📊 Categories available: ${categories.join(', ')}`);
+    
+    // Debug: Log the complete structure
+    console.log(`🔍 Complete popupData structure:`, JSON.stringify(popupData, null, 2));
+    
   } catch (error) {
-    console.error('❌ Failed to load popup data:', error);
-    // Fallback to basic commands if JSON loading fails
+    console.error('❌ Failed to load YAML command data:', error);
+    // Fallback to basic commands if YAML loading fails
     popupData = [
       { command: 'ls', description: 'List directory contents', example: 'ls -la', category: 'file-system' },
       { command: 'cd', description: 'Change directory', example: 'cd /home/user', category: 'navigation' },
@@ -949,6 +1069,47 @@ function updateViewLayout() {
 
 // Popup functionality
 
+// Function to get dynamic suggestions based on current input
+function getDynamicSuggestions(inputText) {
+  console.log(`🔍 getDynamicSuggestions: "${inputText}"`);
+  
+  if (!inputText.trim()) {
+    return popupData; // Show all main commands if input is empty
+  }
+  
+  const words = inputText.trim().split(/\s+/);
+  const firstWord = words[0].toLowerCase();
+  
+  // Find the main command that matches the first word
+  const mainCommand = popupData.find(cmd => cmd.command.toLowerCase() === firstWord);
+  
+  if (mainCommand && mainCommand.subcommands && (words.length > 1 || inputText.endsWith(' '))) {
+    console.log(`🔥 Showing subcommands for ${firstWord}:`, mainCommand.subcommands);
+    // If we found a main command with subcommands and user has typed more words,
+    // show subcommands filtered by the remaining text
+    const remainingText = words.slice(1).join(' ').toLowerCase();
+    
+    if (!remainingText) {
+      // Show all subcommands if no additional text after the main command
+      return mainCommand.subcommands;
+    }
+    
+    // Filter subcommands based on remaining text
+    const filtered = mainCommand.subcommands.filter(subcmd => 
+      subcmd.command.toLowerCase().includes(remainingText) ||
+      subcmd.description.toLowerCase().includes(remainingText)
+    );
+    return filtered;
+  } else {
+    // Show main commands filtered by input text
+    const filtered = popupData.filter(item => 
+      item.command.toLowerCase().includes(inputText.toLowerCase()) ||
+      item.description.toLowerCase().includes(inputText.toLowerCase())
+    );
+    return filtered;
+  }
+}
+
 // Function to show popup with filtered suggestions
 function showPopup(viewId, filterText = '') {
   const popup = document.getElementById(`popup-overlay-${viewId}`);
@@ -956,28 +1117,55 @@ function showPopup(viewId, filterText = '') {
   
   if (!popup || !tableBody) return;
   
-  // Filter data based on input text
-  const filteredData = popupData.filter(item => 
-    item.command.toLowerCase().includes(filterText.toLowerCase()) ||
-    item.description.toLowerCase().includes(filterText.toLowerCase())
-  );
+  // Get dynamic suggestions based on current input
+  const filteredData = getDynamicSuggestions(filterText);
   
   // Clear existing rows
   tableBody.innerHTML = '';
+  
+  // Add context header for subcommands
+  const words = filterText.trim().split(/\s+/);
+  const isSubcommandContext = words.length > 1 && 
+    popupData.find(cmd => cmd.command.toLowerCase() === words[0].toLowerCase() && cmd.subcommands);
+    
+  if (isSubcommandContext && filteredData.length > 0) {
+    const contextHeader = document.createElement('tr');
+    contextHeader.innerHTML = `
+      <td colspan="3" class="popup-context-header">
+        Subcommands for "${words[0]}"
+      </td>
+    `;
+    tableBody.appendChild(contextHeader);
+  }
   
   // Add filtered rows
   filteredData.forEach((item, index) => {
     const row = document.createElement('tr');
     row.setAttribute('data-index', index);
+    
+    // Format the command display based on context
+    let displayCommand = item.command;
+    let commandClass = isSubcommandContext ? 'subcommand' : 'main-command';
+    
+    if (isSubcommandContext) {
+      // For subcommands, show the full command including the main command
+      displayCommand = `${words[0]} ${item.command}`;
+    }
+    
     row.innerHTML = `
-      <td>${item.command}</td>
+      <td class="${commandClass}">${displayCommand}</td>
       <td>${item.description}</td>
       <td>${item.example}</td>
     `;
     
     // Add click handler
     row.addEventListener('click', () => {
-      selectPopupItem(viewId, item.command);
+      if (isSubcommandContext) {
+        // For subcommands, replace the entire input with the full command
+        selectPopupItem(viewId, displayCommand);
+      } else {
+        selectPopupItem(viewId, item.command);
+      }
     });
     
     tableBody.appendChild(row);
@@ -987,6 +1175,14 @@ function showPopup(viewId, filterText = '') {
   if (filteredData.length > 0) {
     popup.style.display = 'block';
     selectedPopupIndex = -1;
+    
+    // Log for debugging
+    const words = filterText.trim().split(/\s+/);
+    if (words.length > 1) {
+      console.log(`🔄 Showing ${filteredData.length} subcommands for '${words[0]}'`);
+    } else {
+      console.log(`📋 Showing ${filteredData.length} main commands`);
+    }
   } else {
     popup.style.display = 'none';
   }
@@ -1018,22 +1214,27 @@ function navigatePopup(viewId, direction) {
   
   if (!popup || popup.style.display === 'none') return;
   
-  const rows = tableBody.querySelectorAll('tr');
-  if (rows.length === 0) return;
+  const allRows = tableBody.querySelectorAll('tr');
+  // Filter out header rows (context headers are not selectable)
+  const selectableRows = Array.from(allRows).filter(row => {
+    return !row.querySelector('.popup-context-header');
+  });
   
-  // Remove current selection
-  rows.forEach(row => row.classList.remove('selected'));
+  if (selectableRows.length === 0) return;
+  
+  // Remove current selection from all rows
+  allRows.forEach(row => row.classList.remove('selected'));
   
   // Update selected index
   if (direction === 'down') {
-    selectedPopupIndex = (selectedPopupIndex + 1) % rows.length;
+    selectedPopupIndex = (selectedPopupIndex + 1) % selectableRows.length;
   } else if (direction === 'up') {
-    selectedPopupIndex = selectedPopupIndex <= 0 ? rows.length - 1 : selectedPopupIndex - 1;
+    selectedPopupIndex = selectedPopupIndex <= 0 ? selectableRows.length - 1 : selectedPopupIndex - 1;
   }
   
-  // Apply selection
-  if (selectedPopupIndex >= 0 && selectedPopupIndex < rows.length) {
-    rows[selectedPopupIndex].classList.add('selected');
+  // Apply selection to the selectable row
+  if (selectedPopupIndex >= 0 && selectedPopupIndex < selectableRows.length) {
+    selectableRows[selectedPopupIndex].classList.add('selected');
   }
 }
 
@@ -1044,12 +1245,38 @@ function selectCurrentPopupItem(viewId) {
   
   if (!popup || popup.style.display === 'none') return false;
   
-  const rows = tableBody.querySelectorAll('tr');
-  if (selectedPopupIndex >= 0 && selectedPopupIndex < rows.length) {
-    const selectedRow = rows[selectedPopupIndex];
+  const allRows = tableBody.querySelectorAll('tr');
+  // Filter out header rows (context headers are not selectable)
+  const selectableRows = Array.from(allRows).filter(row => {
+    return !row.querySelector('.popup-context-header');
+  });
+  
+  if (selectedPopupIndex >= 0 && selectedPopupIndex < selectableRows.length) {
+    const selectedRow = selectableRows[selectedPopupIndex];
     const command = selectedRow.cells[0].textContent;
     selectPopupItem(viewId, command);
     return true;
+  }
+  
+  return false;
+}
+
+// Function to handle smart completion for subcommands
+function handleSmartCompletion(viewId, currentInput) {
+  const words = currentInput.trim().split(/\s+/);
+  
+  if (words.length === 1) {
+    // Single word - check if it's a complete main command with subcommands
+    const mainCommand = popupData.find(cmd => cmd.command.toLowerCase() === words[0].toLowerCase());
+    if (mainCommand && mainCommand.subcommands) {
+      // Add a space and show subcommands
+      const viewInfo = viewData[viewId];
+      if (viewInfo && viewInfo.textInputEl) {
+        viewInfo.textInputEl.value = currentInput + ' ';
+        showPopup(viewId, currentInput + ' ');
+        return true;
+      }
+    }
   }
   
   return false;
@@ -1063,8 +1290,16 @@ function setupPopupEventListeners(viewId) {
   // Show popup on input
   input.addEventListener('input', (e) => {
     const value = e.target.value;
+    
+    // Show popup immediately after first space or if there's any input
     if (value.length > 0) {
-      showPopup(viewId, value);
+      // Check if we just typed a space after the first word (immediate popup trigger)
+      const words = value.trim().split(/\s+/);
+      const hasSpace = value.includes(' ');
+      
+      if (hasSpace || value.length > 0) {
+        showPopup(viewId, value);
+      }
     } else {
       hidePopup(viewId);
     }
@@ -1086,9 +1321,28 @@ function setupPopupEventListeners(viewId) {
         break;
       case 'Tab':
         e.preventDefault();
-        if (selectCurrentPopupItem(viewId)) {
-          // Item was selected, don't process as normal tab
+        // Try smart completion first
+        if (!handleSmartCompletion(viewId, e.target.value)) {
+          // If no smart completion, select current item
+          if (selectCurrentPopupItem(viewId)) {
+            // Item was selected, don't process as normal tab
+          }
         }
+        break;
+      case ' ': // Space key
+        // Show popup immediately when space is pressed after any character
+        setTimeout(() => {
+          const currentValue = e.target.value;
+          if (currentValue.includes(' ') && currentValue.trim().length > 0) {
+            // Show popup immediately for command suggestions
+            showPopup(viewId, currentValue);
+            
+            // Also check for smart completion
+            if (currentValue.endsWith(' ')) {
+              handleSmartCompletion(viewId, currentValue.trim());
+            }
+          }
+        }, 10);
         break;
     }
   });

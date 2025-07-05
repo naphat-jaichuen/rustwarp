@@ -1,0 +1,40 @@
+command: recursive
+description: Search for keywords recursively in subdirectories
+example: findall recursive function class
+category: file-search
+usage: findall recursive [keyword...]
+options:
+  - name: keyword
+    type: string
+    description: Keywords to search for recursively
+    required: true
+    examples:
+      - "function"
+      - "class"
+      - "struct"
+      - "import"
+      - "export"
+      - "async"
+      - "await"
+      - "TODO"
+      - "FIXME"
+      - "console.log"
+  - name: max-depth
+    type: number
+    description: Maximum directory depth to search
+    default: unlimited
+    examples:
+      - "3"
+      - "5"
+      - "10"
+flags:
+  - name: case-sensitive
+    description: Perform case-sensitive search
+    short: c
+  - name: exclude-dirs
+    description: Exclude common directories (node_modules, .git, etc.)
+    short: e
+    default: true
+  - name: include-hidden
+    description: Include hidden files and directories
+    short: h

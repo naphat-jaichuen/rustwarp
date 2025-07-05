@@ -1,0 +1,8 @@
+command: zip
+description: Create ZIP archives
+example: zip -r archive.zip folder/
+category: compression
+subcommands:
+  - "-r"
+  - "-x"
+  - "-9"
