@@ -1,0 +1,20 @@
+command: findall
+description: Find keywords in filtered files or all files in the current directory
+example: findall function variable in *.c *.h
+category: file-search
+usage: findall [keyword...] in [pattern...]
+options:
+  - name: keyword
+    type: string
+    description: Keywords to search for (multiple allowed)
+    required: true
+    examples:
+      - "function"
+      - "variable"
+      - "TODO"
+      - "import"
+      - "class"
+subcommands:
+  - in
+  - recursive
+  - case-sensitive

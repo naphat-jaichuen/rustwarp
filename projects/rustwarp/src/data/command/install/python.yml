@@ -1,0 +1,34 @@
+command: python
+description: Install Python interpreter
+example: install python latest
+category: system-app
+usage: install python [version]
+options:
+  - name: version
+    type: string
+    description: Python version to install
+    default: latest
+    examples:
+      - "latest"
+      - "3.11"
+      - "3.10"
+      - "3.9"
+      - "stable"
+flags:
+  - name: with-pip
+    description: Install pip package manager
+    default: true
+  - name: dev-tools
+    description: Install development tools
+    short: d
+  - name: virtual-env
+    description: Create virtual environment
+    short: v
+sources:
+  - name: official
+    description: Download from python.org
+    default: true
+  - name: brew
+    description: Install via Homebrew (macOS)
+  - name: apt
+    description: Install via APT (Ubuntu/Debian)

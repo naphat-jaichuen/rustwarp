@@ -1,0 +1,9 @@
+command: run
+description: Run an application or more
+example: run team jira gitlab
+category: system-app
+subcommands:
+  - team
+  - jira
+  - gitlab
+  - browser

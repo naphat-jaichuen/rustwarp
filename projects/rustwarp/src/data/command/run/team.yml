@@ -1,0 +1,4 @@
+command: team
+description: Launch team collaboration tools
+example: run team slack discord
+category: system-app

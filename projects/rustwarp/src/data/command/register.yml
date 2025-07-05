@@ -1,0 +1,9 @@
+command: register
+description: Register the tool on the current directory to the local server
+example: register jenkins devops/excel-compare
+category: ci-cd
+subcommands:
+  - jenkins
+  - webhook
+  - service
+  - as
