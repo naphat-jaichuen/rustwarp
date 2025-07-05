@@ -362,6 +362,9 @@
 .buffer-title {
   font-weight: bold;
   color: #646cff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .buffer-info {
@@ -378,6 +381,289 @@
   overflow-y: auto;
   font-size: 0.9em;
   line-height: 1.4;
+  position: relative;
+}
+
+/* Language decoration styles */
+.lang-icon {
+  font-size: 1.1em;
+  margin-right: 4px;
+}
+
+.lang-name {
+  font-weight: normal;
+  font-style: italic;
+  margin-left: 8px;
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+
+.syntax-badge {
+  display: inline-block;
+  background: linear-gradient(45deg, #646cff, #4fc3f7);
+  color: white;
+  font-size: 0.7em;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 8px;
+  cursor: help;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.syntax-badge:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 6px rgba(100, 108, 255, 0.4);
+}
+
+/* Language-specific styling for buffer content */
+.buffer-content.language-javascript {
+  border-left: 3px solid #F7DF1E;
+  background-color: rgba(247, 223, 30, 0.05);
+}
+
+.buffer-content.language-typescript {
+  border-left: 3px solid #3178C6;
+  background-color: rgba(49, 120, 198, 0.05);
+}
+
+.buffer-content.language-reactjsx,
+.buffer-content.language-reacttsx {
+  border-left: 3px solid #61DAFB;
+  background-color: rgba(97, 218, 251, 0.05);
+}
+
+.buffer-content.language-rust {
+  border-left: 3px solid #CE422B;
+  background-color: rgba(206, 66, 43, 0.05);
+}
+
+.buffer-content.language-python {
+  border-left: 3px solid #3776AB;
+  background-color: rgba(55, 118, 171, 0.05);
+}
+
+.buffer-content.language-go {
+  border-left: 3px solid #00ADD8;
+  background-color: rgba(0, 173, 216, 0.05);
+}
+
+.buffer-content.language-java {
+  border-left: 3px solid #ED8B00;
+  background-color: rgba(237, 139, 0, 0.05);
+}
+
+.buffer-content.language-c {
+  border-left: 3px solid #A8B9CC;
+  background-color: rgba(168, 185, 204, 0.05);
+}
+
+.buffer-content.language-cpp,
+.buffer-content.language-cheader,
+.buffer-content.language-cpheader {
+  border-left: 3px solid #00599C;
+  background-color: rgba(0, 89, 156, 0.05);
+}
+
+.buffer-content.language-html {
+  border-left: 3px solid #E34F26;
+  background-color: rgba(227, 79, 38, 0.05);
+}
+
+.buffer-content.language-css,
+.buffer-content.language-scss,
+.buffer-content.language-sass {
+  border-left: 3px solid #1572B6;
+  background-color: rgba(21, 114, 182, 0.05);
+}
+
+.buffer-content.language-markdown {
+  border-left: 3px solid #083FA1;
+  background-color: rgba(8, 63, 161, 0.05);
+}
+
+.buffer-content.language-json {
+  border-left: 3px solid #000000;
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.buffer-content.language-yaml {
+  border-left: 3px solid #CB171E;
+  background-color: rgba(203, 23, 30, 0.05);
+}
+
+.buffer-content.language-shellscript,
+.buffer-content.language-bash,
+.buffer-content.language-zsh,
+.buffer-content.language-fish {
+  border-left: 3px solid #89E051;
+  background-color: rgba(137, 224, 81, 0.05);
+}
+
+.buffer-content.language-sql,
+.buffer-content.language-sqlite {
+  border-left: 3px solid #336791;
+  background-color: rgba(51, 103, 145, 0.05);
+}
+
+.buffer-content.language-xml {
+  border-left: 3px solid #0060AC;
+  background-color: rgba(0, 96, 172, 0.05);
+}
+
+.buffer-content.language-ruby {
+  border-left: 3px solid #CC342D;
+  background-color: rgba(204, 52, 45, 0.05);
+}
+
+.buffer-content.language-php {
+  border-left: 3px solid #777BB4;
+  background-color: rgba(119, 123, 180, 0.05);
+}
+
+.buffer-content.language-swift {
+  border-left: 3px solid #FA7343;
+  background-color: rgba(250, 115, 67, 0.05);
+}
+
+.buffer-content.language-kotlin {
+  border-left: 3px solid #7F52FF;
+  background-color: rgba(127, 82, 255, 0.05);
+}
+
+/* Prism.js Integration Styles */
+.buffer-content pre {
+  margin: 0;
+  padding: 0;
+  background: transparent !important;
+  border: none;
+  border-radius: 0;
+  overflow-x: auto;
+}
+
+.buffer-content code {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace !important;
+  font-size: 0.85em;
+  line-height: 1.4;
+  background: transparent !important;
+  padding: 0;
+  border-radius: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Override Prism theme to work with our dark theme */
+.buffer-content pre[class*="language-"] {
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.buffer-content code[class*="language-"] {
+  background: transparent !important;
+  color: #e6e6e6 !important;
+  text-shadow: none !important;
+}
+
+/* Syntax highlighting token colors - dark theme optimized */
+.buffer-content .token.comment,
+.buffer-content .token.prolog,
+.buffer-content .token.doctype,
+.buffer-content .token.cdata {
+  color: #7c7c7c !important;
+  font-style: italic;
+}
+
+.buffer-content .token.punctuation {
+  color: #c9c9c9 !important;
+}
+
+.buffer-content .token.property,
+.buffer-content .token.tag,
+.buffer-content .token.boolean,
+.buffer-content .token.number,
+.buffer-content .token.constant,
+.buffer-content .token.symbol,
+.buffer-content .token.deleted {
+  color: #f08d49 !important;
+}
+
+.buffer-content .token.selector,
+.buffer-content .token.attr-name,
+.buffer-content .token.string,
+.buffer-content .token.char,
+.buffer-content .token.builtin,
+.buffer-content .token.inserted {
+  color: #7ec699 !important;
+}
+
+.buffer-content .token.operator,
+.buffer-content .token.entity,
+.buffer-content .token.url,
+.buffer-content .language-css .token.string,
+.buffer-content .style .token.string {
+  color: #67cdcc !important;
+}
+
+.buffer-content .token.atrule,
+.buffer-content .token.attr-value,
+.buffer-content .token.keyword {
+  color: #c792ea !important;
+}
+
+.buffer-content .token.function,
+.buffer-content .token.class-name {
+  color: #82aaff !important;
+}
+
+.buffer-content .token.regex,
+.buffer-content .token.important,
+.buffer-content .token.variable {
+  color: #f78c6c !important;
+}
+
+.buffer-content .token.important,
+.buffer-content .token.bold {
+  font-weight: bold;
+}
+
+.buffer-content .token.italic {
+  font-style: italic;
+}
+
+/* Language-specific adjustments */
+.buffer-content .language-rust .token.keyword {
+  color: #ff9500 !important;
+}
+
+.buffer-content .language-rust .token.macro {
+  color: #ff6b6b !important;
+}
+
+.buffer-content .language-javascript .token.template-string {
+  color: #7ec699 !important;
+}
+
+.buffer-content .language-python .token.decorator {
+  color: #ffcb6b !important;
+}
+
+.buffer-content .language-json .token.property {
+  color: #82aaff !important;
+}
+
+/* Ensure proper scrolling for syntax highlighted content */
+.buffer-content pre code {
+  display: block;
+  overflow-x: auto;
+  padding: 0;
+  white-space: pre;
+  word-wrap: normal;
 }
 
 /* Command output styling */

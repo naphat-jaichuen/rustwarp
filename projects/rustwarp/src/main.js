@@ -76,15 +76,43 @@ function addTerminalEntry(text, viewId, isFileContent = false, expandableContent
     if (typeof expandableContent === 'string') {
       expandableDiv.innerHTML = `<div class="expandable-text">${escapeHtml(expandableContent)}</div>`;
     } else if (expandableContent.type === 'buffer') {
+      // Extract filename from title for language detection
+      const fileName = expandableContent.fileName || (expandableContent.title ? expandableContent.title.replace('File Content: ', '') : null);
+      const langPreset = fileName ? getLanguagePreset(fileName) : null;
+      
+      // Apply language styling to content
+      const contentStyle = langPreset ? `background-color: ${langPreset.bgColor}; border-left: 3px solid ${langPreset.color};` : '';
+      const langClass = langPreset ? `language-${langPreset.name.toLowerCase().replace(/[^a-z0-9]/g, '')}` : '';
+      
+      // Enhanced header with language info
+      const syntaxHighlightingBadge = langPreset && langPreset.prismLang ? 
+        `<span class="syntax-badge" title="Syntax highlighting enabled for ${langPreset.name}">✨ Highlighted</span>` : '';
+      
+      const headerContent = langPreset ? 
+        `<span class="lang-icon">${langPreset.icon}</span> ${expandableContent.title || 'Buffer Content'} <span class="lang-name" style="color: ${langPreset.color}; font-size: 0.8em; opacity: 0.7;">${langPreset.name}</span> ${syntaxHighlightingBadge}` :
+        expandableContent.title || 'Buffer Content';
+      
       expandableDiv.innerHTML = `
         <div class="expandable-buffer">
           <div class="buffer-header">
-            <span class="buffer-title">${expandableContent.title || 'Buffer Content'}</span>
+            <span class="buffer-title">${headerContent}</span>
             <span class="buffer-info">${expandableContent.lines || 0} lines, ${expandableContent.size || 'unknown size'}</span>
           </div>
-          <div class="buffer-content">${escapeHtml(expandableContent.content)}</div>
+          <div class="buffer-content ${langClass}" style="${contentStyle}">
+            <pre><code class="language-${langPreset ? langPreset.prismLang || 'text' : 'text'}">${escapeHtml(expandableContent.content)}</code></pre>
+          </div>
         </div>
       `;
+      
+      // Apply syntax highlighting after DOM insertion
+      setTimeout(() => {
+        if (window.Prism) {
+          const codeElements = expandableDiv.querySelectorAll('pre code');
+          codeElements.forEach(code => {
+            window.Prism.highlightElement(code);
+          });
+        }
+      }, 10);
     } else if (expandableContent.type === 'output') {
       expandableDiv.innerHTML = `
         <div class="expandable-output">
@@ -149,8 +177,16 @@ function toggleRowContent(rowId) {
     expandButton.title = 'Click to collapse';
     console.log(`📜 Expanded content for row ${rowId}`);
     
-    // Auto-scroll to keep the expanded content visible
+    // Re-apply syntax highlighting for newly visible content
     setTimeout(() => {
+      if (window.Prism) {
+        const codeElements = expandableDiv.querySelectorAll('pre code[class*="language-"]');
+        codeElements.forEach(code => {
+          window.Prism.highlightElement(code);
+        });
+      }
+      
+      // Auto-scroll to keep the expanded content visible
       expandableDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }, 100);
   }
@@ -1016,11 +1052,107 @@ function formatFileSize(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+// Language decoration presets for different file types
+const languagePresets = {
+  // Web Technologies
+  '.js': { name: 'JavaScript', icon: '🟨', color: '#F7DF1E', bgColor: 'rgba(247, 223, 30, 0.1)', prismLang: 'javascript' },
+  '.ts': { name: 'TypeScript', icon: '🔷', color: '#3178C6', bgColor: 'rgba(49, 120, 198, 0.1)', prismLang: 'typescript' },
+  '.jsx': { name: 'React JSX', icon: '⚛️', color: '#61DAFB', bgColor: 'rgba(97, 218, 251, 0.1)', prismLang: 'jsx' },
+  '.tsx': { name: 'React TSX', icon: '⚛️', color: '#61DAFB', bgColor: 'rgba(97, 218, 251, 0.1)', prismLang: 'tsx' },
+  '.html': { name: 'HTML', icon: '🌐', color: '#E34F26', bgColor: 'rgba(227, 79, 38, 0.1)', prismLang: 'html' },
+  '.css': { name: 'CSS', icon: '🎨', color: '#1572B6', bgColor: 'rgba(21, 114, 182, 0.1)', prismLang: 'css' },
+  '.scss': { name: 'SCSS', icon: '🎨', color: '#CF649A', bgColor: 'rgba(207, 100, 154, 0.1)', prismLang: 'scss' },
+  '.sass': { name: 'Sass', icon: '🎨', color: '#CF649A', bgColor: 'rgba(207, 100, 154, 0.1)', prismLang: 'sass' },
+  '.vue': { name: 'Vue.js', icon: '💚', color: '#4FC08D', bgColor: 'rgba(79, 192, 141, 0.1)', prismLang: 'html' },
+  
+  // Systems Programming
+  '.rs': { name: 'Rust', icon: '🦀', color: '#CE422B', bgColor: 'rgba(206, 66, 43, 0.1)', prismLang: 'rust' },
+  '.c': { name: 'C', icon: '🔧', color: '#A8B9CC', bgColor: 'rgba(168, 185, 204, 0.1)', prismLang: 'c' },
+  '.cpp': { name: 'C++', icon: '🔧', color: '#00599C', bgColor: 'rgba(0, 89, 156, 0.1)', prismLang: 'cpp' },
+  '.cc': { name: 'C++', icon: '🔧', color: '#00599C', bgColor: 'rgba(0, 89, 156, 0.1)', prismLang: 'cpp' },
+  '.h': { name: 'C Header', icon: '📄', color: '#A8B9CC', bgColor: 'rgba(168, 185, 204, 0.1)', prismLang: 'c' },
+  '.hpp': { name: 'C++ Header', icon: '📄', color: '#00599C', bgColor: 'rgba(0, 89, 156, 0.1)', prismLang: 'cpp' },
+  '.go': { name: 'Go', icon: '🐹', color: '#00ADD8', bgColor: 'rgba(0, 173, 216, 0.1)', prismLang: 'go' },
+  '.zig': { name: 'Zig', icon: '⚡', color: '#F7A41D', bgColor: 'rgba(247, 164, 29, 0.1)', prismLang: 'clike' },
+  
+  // Scripting & Dynamic Languages
+  '.py': { name: 'Python', icon: '🐍', color: '#3776AB', bgColor: 'rgba(55, 118, 171, 0.1)', prismLang: 'python' },
+  '.rb': { name: 'Ruby', icon: '💎', color: '#CC342D', bgColor: 'rgba(204, 52, 45, 0.1)', prismLang: 'ruby' },
+  '.php': { name: 'PHP', icon: '🐘', color: '#777BB4', bgColor: 'rgba(119, 123, 180, 0.1)', prismLang: 'php' },
+  '.pl': { name: 'Perl', icon: '🐪', color: '#39457E', bgColor: 'rgba(57, 69, 126, 0.1)', prismLang: 'perl' },
+  '.lua': { name: 'Lua', icon: '🌙', color: '#2C2D72', bgColor: 'rgba(44, 45, 114, 0.1)', prismLang: 'lua' },
+  
+  // JVM Languages
+  '.java': { name: 'Java', icon: '☕', color: '#ED8B00', bgColor: 'rgba(237, 139, 0, 0.1)', prismLang: 'java' },
+  '.kt': { name: 'Kotlin', icon: '🎯', color: '#7F52FF', bgColor: 'rgba(127, 82, 255, 0.1)', prismLang: 'kotlin' },
+  '.scala': { name: 'Scala', icon: '🌶️', color: '#DC322F', bgColor: 'rgba(220, 50, 47, 0.1)', prismLang: 'scala' },
+  '.clj': { name: 'Clojure', icon: '🌿', color: '#5881D8', bgColor: 'rgba(88, 129, 216, 0.1)', prismLang: 'clojure' },
+  
+  // Functional Languages
+  '.hs': { name: 'Haskell', icon: '🎭', color: '#5D4F85', bgColor: 'rgba(93, 79, 133, 0.1)', prismLang: 'haskell' },
+  '.elm': { name: 'Elm', icon: '🌳', color: '#60B5CC', bgColor: 'rgba(96, 181, 204, 0.1)', prismLang: 'elm' },
+  '.ml': { name: 'OCaml', icon: '🐫', color: '#3BE133', bgColor: 'rgba(59, 225, 51, 0.1)', prismLang: 'ocaml' },
+  '.fs': { name: 'F#', icon: '🔷', color: '#378BBA', bgColor: 'rgba(55, 139, 186, 0.1)', prismLang: 'fsharp' },
+  
+  // Shell & Scripts
+  '.sh': { name: 'Shell Script', icon: '🐚', color: '#89E051', bgColor: 'rgba(137, 224, 81, 0.1)', prismLang: 'bash' },
+  '.bash': { name: 'Bash', icon: '🐚', color: '#89E051', bgColor: 'rgba(137, 224, 81, 0.1)', prismLang: 'bash' },
+  '.zsh': { name: 'Zsh', icon: '🐚', color: '#89E051', bgColor: 'rgba(137, 224, 81, 0.1)', prismLang: 'bash' },
+  '.fish': { name: 'Fish', icon: '🐠', color: '#00D494', bgColor: 'rgba(0, 212, 148, 0.1)', prismLang: 'bash' },
+  '.ps1': { name: 'PowerShell', icon: '💙', color: '#012456', bgColor: 'rgba(1, 36, 86, 0.1)', prismLang: 'powershell' },
+  
+  // Data & Config
+  '.json': { name: 'JSON', icon: '📋', color: '#000000', bgColor: 'rgba(0, 0, 0, 0.05)', prismLang: 'json' },
+  '.xml': { name: 'XML', icon: '📄', color: '#0060AC', bgColor: 'rgba(0, 96, 172, 0.1)', prismLang: 'xml' },
+  '.yaml': { name: 'YAML', icon: '📝', color: '#CB171E', bgColor: 'rgba(203, 23, 30, 0.1)', prismLang: 'yaml' },
+  '.yml': { name: 'YAML', icon: '📝', color: '#CB171E', bgColor: 'rgba(203, 23, 30, 0.1)', prismLang: 'yaml' },
+  '.toml': { name: 'TOML', icon: '⚙️', color: '#9C4221', bgColor: 'rgba(156, 66, 33, 0.1)', prismLang: 'toml' },
+  '.ini': { name: 'INI', icon: '⚙️', color: '#6D8086', bgColor: 'rgba(109, 128, 134, 0.1)', prismLang: 'ini' },
+  '.conf': { name: 'Config', icon: '⚙️', color: '#6D8086', bgColor: 'rgba(109, 128, 134, 0.1)', prismLang: 'nginx' },
+  '.env': { name: 'Environment', icon: '🌍', color: '#ECD53F', bgColor: 'rgba(236, 213, 63, 0.1)', prismLang: 'bash' },
+  
+  // Database
+  '.sql': { name: 'SQL', icon: '🗃️', color: '#336791', bgColor: 'rgba(51, 103, 145, 0.1)', prismLang: 'sql' },
+  '.sqlite': { name: 'SQLite', icon: '🗃️', color: '#003B57', bgColor: 'rgba(0, 59, 87, 0.1)', prismLang: 'sql' },
+  
+  // Documentation
+  '.md': { name: 'Markdown', icon: '📖', color: '#083FA1', bgColor: 'rgba(8, 63, 161, 0.1)', prismLang: 'markdown' },
+  '.rst': { name: 'reStructuredText', icon: '📖', color: '#141414', bgColor: 'rgba(20, 20, 20, 0.1)', prismLang: 'rest' },
+  '.tex': { name: 'LaTeX', icon: '📜', color: '#008080', bgColor: 'rgba(0, 128, 128, 0.1)', prismLang: 'latex' },
+  
+  // Mobile
+  '.swift': { name: 'Swift', icon: '🍎', color: '#FA7343', bgColor: 'rgba(250, 115, 67, 0.1)', prismLang: 'swift' },
+  '.dart': { name: 'Dart', icon: '🎯', color: '#0175C2', bgColor: 'rgba(1, 117, 194, 0.1)', prismLang: 'dart' },
+  
+  // Other
+  '.r': { name: 'R', icon: '📊', color: '#276DC3', bgColor: 'rgba(39, 109, 195, 0.1)', prismLang: 'r' },
+  '.m': { name: 'MATLAB', icon: '🔢', color: '#0076A8', bgColor: 'rgba(0, 118, 168, 0.1)', prismLang: 'matlab' },
+  '.jl': { name: 'Julia', icon: '🔴', color: '#9558B2', bgColor: 'rgba(149, 88, 178, 0.1)', prismLang: 'julia' },
+  '.nim': { name: 'Nim', icon: '👑', color: '#FFE953', bgColor: 'rgba(255, 233, 83, 0.1)', prismLang: 'nim' },
+  '.cr': { name: 'Crystal', icon: '💎', color: '#000000', bgColor: 'rgba(0, 0, 0, 0.05)', prismLang: 'crystal' },
+  
+  // Logs and plain text
+  '.log': { name: 'Log File', icon: '📜', color: '#6C6C6C', bgColor: 'rgba(108, 108, 108, 0.1)', prismLang: 'log' },
+  '.txt': { name: 'Text', icon: '📄', color: '#6C6C6C', bgColor: 'rgba(108, 108, 108, 0.05)', prismLang: 'text' },
+  '.csv': { name: 'CSV', icon: '📊', color: '#1D6F42', bgColor: 'rgba(29, 111, 66, 0.1)', prismLang: 'csv' }
+};
+
+// Function to get language preset for a file
+function getLanguagePreset(fileName) {
+  const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+  return languagePresets[ext] || { 
+    name: 'Unknown', 
+    icon: '📄', 
+    color: '#6C6C6C', 
+    bgColor: 'rgba(108, 108, 108, 0.05)',
+    prismLang: 'text'
+  };
+}
+
 // Function to check if file is likely text
 function isTextFile(fileName) {
-  const textExtensions = ['.txt', '.md', '.js', '.ts', '.json', '.html', '.css', '.xml', '.yml', '.yaml', '.csv', '.log', '.sh', '.py', '.rb', '.php', '.java', '.cpp', '.c', '.h', '.rs', '.go', '.sql', '.conf', '.ini', '.toml'];
   const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
-  return textExtensions.includes(ext);
+  return languagePresets.hasOwnProperty(ext);
 }
 
 // Function to read and display file content
@@ -1051,13 +1183,19 @@ function readFileContent(file, viewId) {
     const bufferContent = {
       type: 'buffer',
       title: `File Content: ${file.name}`,
+      fileName: file.name,
       lines: lineCount,
       size: fileSize,
       content: content
     };
     
-    // Display file info in first row with expandable content
-    const fileInfo = `📄 ${file.name} (${fileSize}, ${lineCount} lines)`;
+    // Get language preset for enhanced file display
+    const langPreset = getLanguagePreset(file.name);
+    
+    // Display file info in first row with expandable content and language decoration
+    const fileInfo = langPreset ? 
+      `${langPreset.icon} ${file.name} (${fileSize}, ${lineCount} lines) - ${langPreset.name}` :
+      `📄 ${file.name} (${fileSize}, ${lineCount} lines)`;
     addTerminalEntry(fileInfo, viewId, false, bufferContent);
   };
   
@@ -1104,13 +1242,19 @@ async function readTauriFileContent(filePath, viewId) {
     const bufferContent = {
       type: 'buffer',
       title: `File Content: ${fileName}`,
+      fileName: fileName,
       lines: lineCount,
       size: formattedSize,
       content: content
     };
     
-    // Display file info in first row with expandable content
-    const fileInfo = `📄 ${fileName} (${formattedSize}, ${lineCount} lines)`;
+    // Get language preset for enhanced file display
+    const langPreset = getLanguagePreset(fileName);
+    
+    // Display file info in first row with expandable content and language decoration
+    const fileInfo = langPreset ? 
+      `${langPreset.icon} ${fileName} (${formattedSize}, ${lineCount} lines) - ${langPreset.name}` :
+      `📄 ${fileName} (${formattedSize}, ${lineCount} lines)`;
     addTerminalEntry(fileInfo, viewId, false, bufferContent);
   } catch (error) {
     addTerminalEntry(`❌ Error reading file ${fileName}: ${error.message}`, viewId);

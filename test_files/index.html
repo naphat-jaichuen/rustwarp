@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RustWarp Syntax Highlighting Demo</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Embedded CSS for demo */
+        .demo-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .demo-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .demo-title {
+            color: white;
+            font-size: 2.5rem;
+            text-align: center;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .demo-subtitle {
+            color: rgba(255, 255, 255, 0.9);
+            text-align: center;
+            margin-bottom: 2rem;
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <div class="demo-card">
+            <h1 class="demo-title">🎨 RustWarp Syntax Highlighting</h1>
+            <p class="demo-subtitle">Advanced code visualization with Prism.js integration</p>
+            
+            <div class="features-grid">
+                <div class="feature-item">
+                    <h3>🦀 Multi-Language Support</h3>
+                    <p>Supports 50+ programming languages including Rust, JavaScript, Python, Go, Java, and more.</p>
+                </div>
+                
+                <div class="feature-item">
+                    <h3>🌈 Smart Color Coding</h3>
+                    <p>Intelligent syntax highlighting with language-specific color schemes and styling.</p>
+                </div>
+                
+                <div class="feature-item">
+                    <h3>📁 Drag & Drop Interface</h3>
+                    <p>Simply drag files into the terminal to automatically detect language and apply highlighting.</p>
+                </div>
+                
+                <div class="feature-item">
+                    <h3>⚡ Real-time Processing</h3>
+                    <p>Instant syntax highlighting as soon as files are opened with expandable content viewers.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="demo-card">
+            <h2>🎯 How to Use</h2>
+            <ol>
+                <li><strong>Open RustWarp</strong> - Launch the application</li>
+                <li><strong>Drag Files</strong> - Drop code files into any terminal view</li>
+                <li><strong>View Content</strong> - Click the expand button (▶) to view syntax-highlighted code</li>
+                <li><strong>Multi-View</strong> - Use multiple terminal views to compare different files</li>
+            </ol>
+        </div>
+        
+        <div class="demo-card">
+            <h2>🚀 Supported File Types</h2>
+            <div class="language-grid">
+                <span class="lang-tag js">🟨 JavaScript (.js)</span>
+                <span class="lang-tag ts">🔷 TypeScript (.ts)</span>
+                <span class="lang-tag rust">🦀 Rust (.rs)</span>
+                <span class="lang-tag python">🐍 Python (.py)</span>
+                <span class="lang-tag java">☕ Java (.java)</span>
+                <span class="lang-tag go">🐹 Go (.go)</span>
+                <span class="lang-tag css">🎨 CSS (.css)</span>
+                <span class="lang-tag html">🌐 HTML (.html)</span>
+                <span class="lang-tag json">📋 JSON (.json)</span>
+                <span class="lang-tag sql">🗃️ SQL (.sql)</span>
+                <span class="lang-tag md">📖 Markdown (.md)</span>
+                <span class="lang-tag sh">🐚 Shell (.sh)</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simple demo JavaScript
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🎉 RustWarp Syntax Highlighting Demo Loaded!');
+            
+            // Add some interactivity
+            const featureItems = document.querySelectorAll('.feature-item');
+            featureItems.forEach((item, index) => {
+                item.style.animationDelay = `${index * 0.2}s`;
+                item.classList.add('fade-in');
+            });
+            
+            // Language tag hover effects
+            const langTags = document.querySelectorAll('.lang-tag');
+            langTags.forEach(tag => {
+                tag.addEventListener('mouseenter', function() {
+                    this.style.transform = 'scale(1.1) rotate(2deg)';
+                });
+                
+                tag.addEventListener('mouseleave', function() {
+                    this.style.transform = 'scale(1) rotate(0deg)';
+                });
+            });
+        });
+        
+        // Utility functions
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+        
+        // Example async function
+        async function loadDemoData() {
+            try {
+                const response = await fetch('/api/demo-data');
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Failed to load demo data:', error);
+                showNotification('Failed to load demo data', 'error');
+                return null;
+            }
+        }
+    </script>
+</body>
+</html>

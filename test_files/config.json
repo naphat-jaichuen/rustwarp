@@ -1,0 +1,63 @@
+{
+  "application": {
+    "name": "RustWarp",
+    "version": "1.0.0",
+    "description": "A modern terminal application with drag-and-drop file support"
+  },
+  "features": {
+    "multiView": true,
+    "dragAndDrop": true,
+    "languageDetection": true,
+    "syntaxHighlighting": false,
+    "maxViews": 2
+  },
+  "ui": {
+    "theme": "dark",
+    "fontSize": 13,
+    "fontFamily": "Monaco, Menlo, Ubuntu Mono, Courier New, monospace",
+    "colors": {
+      "primary": "#646cff",
+      "secondary": "#4682b4",
+      "background": "#1a1a1a",
+      "text": "#ffffff"
+    }
+  },
+  "languages": {
+    "supported": [
+      "javascript",
+      "typescript",
+      "rust",
+      "python",
+      "java",
+      "c",
+      "cpp",
+      "go",
+      "html",
+      "css",
+      "json",
+      "yaml",
+      "markdown",
+      "shell"
+    ],
+    "presets": {
+      "javascript": {
+        "icon": "🟨",
+        "color": "#F7DF1E"
+      },
+      "rust": {
+        "icon": "🦀",
+        "color": "#CE422B"
+      },
+      "python": {
+        "icon": "🐍",
+        "color": "#3776AB"
+      }
+    }
+  },
+  "defaults": {
+    "expandContent": false,
+    "autoScroll": true,
+    "showTimestamps": true,
+    "showFileInfo": true
+  }
+}
