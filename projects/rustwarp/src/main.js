@@ -142,6 +142,45 @@ function addTerminalEntry(text, viewId, isFileContent = false, expandableContent
           <div class="output-content">${escapeHtml(expandableContent.content)}</div>
         </div>
       `;
+    } else if (expandableContent.type === 'image') {
+      const imageId = `image-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      expandableDiv.innerHTML = `
+        <div class="expandable-image">
+          <div class="image-header">
+            <span class="image-title">🖼️ ${expandableContent.title || 'Image'}</span>
+            <span class="image-info">${expandableContent.size || 'unknown size'}</span>
+          </div>
+          <div class="image-content">
+            <img id="${imageId}" src="${expandableContent.imageData}" alt="${expandableContent.fileName}" class="image-display" />
+          </div>
+          <div class="image-actions">
+            <button class="image-action-btn" onclick="downloadImage('${escapeHtml(expandableContent.fileName)}', '${expandableContent.imageData}')" title="Download image">
+              💾 Download
+            </button>
+            <button class="image-action-btn" onclick="copyImageToClipboard('${imageId}')" title="Copy image to clipboard">
+              📋 Copy
+            </button>
+            <span class="image-dimensions" id="${imageId}-dimensions">Loading...</span>
+          </div>
+        </div>
+      `;
+      
+      // Set up image load handler to get dimensions
+      setTimeout(() => {
+        const imgElement = document.getElementById(imageId);
+        const dimensionsElement = document.getElementById(`${imageId}-dimensions`);
+        
+        if (imgElement && dimensionsElement) {
+          imgElement.onload = function() {
+            dimensionsElement.textContent = `${this.naturalWidth} × ${this.naturalHeight} pixels`;
+          };
+          
+          imgElement.onerror = function() {
+            dimensionsElement.textContent = 'Failed to load image';
+          };
+        }
+      }, 10);
     }
     terminalRow.appendChild(expandableDiv);
   }
@@ -1425,9 +1464,64 @@ function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Function to check if file is an image
+function isImageFile(fileName) {
+  const imageExtensions = new Set(['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.ico', '.tiff', '.webp']);
+  const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+  return imageExtensions.has(ext);
+}
+
+// Function to get MIME type for image files
+function getMimeType(fileName) {
+  const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+  const mimeTypes = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.bmp': 'image/bmp',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+    '.tiff': 'image/tiff',
+    '.webp': 'image/webp'
+  };
+  return mimeTypes[ext] || 'image/jpeg';
+}
+
 // Function to read and display file content
 function readFileContent(file, viewId) {
   const fileSize = formatFileSize(file.size);
+  
+  // Check if it's an image file
+  if (isImageFile(file.name)) {
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+      const imageData = e.target.result;
+      
+      // Create expandable content for the image
+      const imageContent = {
+        type: 'image',
+        title: `Image: ${file.name}`,
+        fileName: file.name,
+        size: fileSize,
+        imageData: imageData,
+        width: null, // Will be set after image loads
+        height: null
+      };
+      
+      // Display image info with expandable content
+      const imageInfo = `🖼️ ${file.name} (${fileSize}) - Image`;
+      addTerminalEntry(imageInfo, viewId, false, imageContent);
+    };
+    
+    reader.onerror = function() {
+      addTerminalEntry(`❌ Error reading image file: ${file.name}`, viewId);
+    };
+    
+    reader.readAsDataURL(file);
+    return;
+  }
   
   // Check if it's likely a text file
   if (!isTextFile(file.name)) {
@@ -1572,6 +1666,47 @@ async function handleTauriDirectory(dirPath, viewId) {
   addTerminalEntry(dirInfo, viewId, false, null, true);
 }
 
+// Function to download image
+function downloadImage(fileName, imageData) {
+  const link = document.createElement('a');
+  link.href = imageData;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// Function to copy image to clipboard
+async function copyImageToClipboard(imageId) {
+  try {
+    const imgElement = document.getElementById(imageId);
+    if (!imgElement) {
+      console.error('Image element not found');
+      return;
+    }
+    
+    // Create a canvas to convert image to blob
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = imgElement.naturalWidth;
+    canvas.height = imgElement.naturalHeight;
+    ctx.drawImage(imgElement, 0, 0);
+    
+    canvas.toBlob(async (blob) => {
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': blob })
+        ]);
+        console.log('Image copied to clipboard');
+      } catch (err) {
+        console.error('Failed to copy image to clipboard:', err);
+      }
+    });
+  } catch (error) {
+    console.error('Error copying image to clipboard:', error);
+  }
+}
+
 // Function to read Tauri file content
 async function readTauriFileContent(filePath, viewId) {
   if (!window.__TAURI__) {
@@ -1594,6 +1729,64 @@ async function readTauriFileContent(filePath, viewId) {
   }
   
   const fileName = filePath.split('/').pop() || filePath.split('\\').pop();
+  
+  // Check if it's an image file
+  if (isImageFile(fileName)) {
+    try {
+      console.log(`🖼️ Reading image file: ${fileName}`);
+      
+      // Check if readBinaryFile is available
+      if (!window.__TAURI__.fs.readBinaryFile) {
+        throw new Error('readBinaryFile not available in Tauri fs module');
+      }
+      
+      // For images, we need to read them as binary and convert to base64
+      const { readBinaryFile } = window.__TAURI__.fs;
+      const binaryData = await readBinaryFile(filePath);
+      
+      console.log(`📄 Image binary data length: ${binaryData.length}`);
+      console.log(`📄 Binary data type:`, typeof binaryData);
+      console.log(`📄 Binary data constructor:`, binaryData.constructor.name);
+      
+      // Ensure we have a Uint8Array
+      const uint8Array = binaryData instanceof Uint8Array ? binaryData : new Uint8Array(binaryData);
+      
+      // For large images, we might need to handle memory more carefully
+      if (uint8Array.length > 10 * 1024 * 1024) { // 10MB limit
+        throw new Error(`Image file too large (${formatFileSize(uint8Array.length)}). Maximum size is 10MB.`);
+      }
+      
+      // Convert Uint8Array to base64 using reduce method (more efficient)
+      const binaryString = Array.from(uint8Array, byte => String.fromCharCode(byte)).join('');
+      const base64String = btoa(binaryString);
+      
+      const mimeType = getMimeType(fileName);
+      const imageData = `data:${mimeType};base64,${base64String}`;
+      
+      console.log(`✅ Successfully converted image to base64, MIME type: ${mimeType}`);
+      
+      // Calculate file size
+      const fileSize = formatFileSize(uint8Array.length);
+      
+      // Create expandable content for the image
+      const imageContent = {
+        type: 'image',
+        title: `Image: ${fileName}`,
+        fileName: fileName,
+        size: fileSize,
+        imageData: imageData
+      };
+      
+      // Display image info with expandable content
+      const imageInfo = `🖼️ ${fileName} (${fileSize}) - Image`;
+      addTerminalEntry(imageInfo, viewId, false, imageContent);
+      return;
+    } catch (error) {
+      console.error(`❌ Image read error for ${fileName}:`, error);
+      addTerminalEntry(`❌ Error reading image file ${fileName}: ${error.message}`, viewId);
+      return;
+    }
+  }
   
   // Check if it's likely a text file
   if (!isTextFile(fileName)) {

@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::fs;
+use base64::{Engine as _, engine::general_purpose};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -54,12 +55,47 @@ fn handle_directory(path: &str) -> Result<String, String> {
     }
 }
 
+// Read binary file and return as base64 string
+#[tauri::command]
+fn read_image_file(path: &str) -> Result<String, String> {
+    let path_obj = Path::new(path);
+    
+    if !path_obj.exists() {
+        return Err(format!("File does not exist: {}", path));
+    }
+    
+    if path_obj.is_dir() {
+        return Err(format!("Path is a directory, not a file: {}", path));
+    }
+    
+    // Check file size (limit to 10MB for safety)
+    match fs::metadata(path) {
+        Ok(metadata) => {
+            let file_size = metadata.len();
+            if file_size > 10 * 1024 * 1024 {
+                return Err(format!("File too large: {} bytes (max 10MB)", file_size));
+            }
+        },
+        Err(e) => return Err(format!("Failed to get file metadata: {}", e))
+    }
+    
+    // Read the binary file
+    match fs::read(path) {
+        Ok(bytes) => {
+            // Convert to base64 using base64 crate
+            let base64_string = general_purpose::STANDARD.encode(&bytes);
+            Ok(base64_string)
+        },
+        Err(e) => Err(format!("Failed to read file: {}", e))
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
-        .invoke_handler(tauri::generate_handler![greet, is_directory, handle_directory])
+        .invoke_handler(tauri::generate_handler![greet, is_directory, handle_directory, read_image_file])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
