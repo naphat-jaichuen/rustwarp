@@ -36,8 +36,8 @@ function initializeViewData(viewId) {
   };
 }
 
-// Function to add a new entry to the terminal-like output
-function addTerminalEntry(text, viewId, isFileContent = false) {
+// Function to add a new entry to the terminal-like output with optional expandable content
+function addTerminalEntry(text, viewId, isFileContent = false, expandableContent = null) {
   if (!text.trim() && !isFileContent) return; // Don't process empty text unless it's file content
 
   const viewInfo = viewData[viewId];
@@ -45,14 +45,60 @@ function addTerminalEntry(text, viewId, isFileContent = false) {
 
   viewInfo.rowCounter++;
   const currentTime = new Date().toLocaleString();
+  const rowId = `row-${viewId}-${viewInfo.rowCounter}`;
 
   // Create new terminal row with column structure
   const terminalRow = document.createElement('div');
   terminalRow.className = isFileContent ? 'terminal-row file-content-row' : 'terminal-row';
-  terminalRow.innerHTML = `
+  terminalRow.id = rowId;
+  
+  // Build the row content with optional expand button
+  let rowHTML = `
     <div class="row-time-column" style="font-size: ${Math.max(8, currentFontSize - 2)}px;">${currentTime}</div>
-    <div class="row-content-column ${isFileContent ? 'file-content' : ''}" style="font-size: ${currentFontSize}px;">${escapeHtml(text)}</div>
+    <div class="row-content-column ${isFileContent ? 'file-content' : ''}" style="font-size: ${currentFontSize}px;">
+      <div class="row-main-content">
+        ${expandableContent ? '<span class="expand-button" onclick="toggleRowContent(\'' + rowId + '\')" title="Click to expand/collapse">▶</span>' : ''}
+        <span class="row-text">${escapeHtml(text)}</span>
+      </div>
+    </div>
   `;
+  
+  terminalRow.innerHTML = rowHTML;
+
+  // Add expandable content if provided
+  if (expandableContent) {
+    const expandableDiv = document.createElement('div');
+    expandableDiv.className = 'row-expandable-content';
+    expandableDiv.id = `${rowId}-expandable`;
+    expandableDiv.style.display = 'none';
+    
+    // Handle different types of expandable content
+    if (typeof expandableContent === 'string') {
+      expandableDiv.innerHTML = `<div class="expandable-text">${escapeHtml(expandableContent)}</div>`;
+    } else if (expandableContent.type === 'buffer') {
+      expandableDiv.innerHTML = `
+        <div class="expandable-buffer">
+          <div class="buffer-header">
+            <span class="buffer-title">${expandableContent.title || 'Buffer Content'}</span>
+            <span class="buffer-info">${expandableContent.lines || 0} lines, ${expandableContent.size || 'unknown size'}</span>
+          </div>
+          <div class="buffer-content">${escapeHtml(expandableContent.content)}</div>
+        </div>
+      `;
+    } else if (expandableContent.type === 'output') {
+      expandableDiv.innerHTML = `
+        <div class="expandable-output">
+          <div class="output-header">
+            <span class="output-title">${expandableContent.title || 'Command Output'}</span>
+            <span class="output-info">${expandableContent.exitCode !== undefined ? 'Exit code: ' + expandableContent.exitCode : ''}</span>
+          </div>
+          <div class="output-content">${escapeHtml(expandableContent.content)}</div>
+        </div>
+      `;
+    }
+    
+    terminalRow.appendChild(expandableDiv);
+  }
 
   // Add terminal entry
   const terminalOutput = document.getElementById(`terminal-output-${viewId}`);
@@ -73,8 +119,42 @@ function addTerminalEntry(text, viewId, isFileContent = false) {
     terminalRow.style.transition = 'opacity 0.1s ease-in';
     terminalRow.style.opacity = '1';
   }, 5);
+  
+  return rowId; // Return the row ID for potential further manipulation
 }
 
+
+// Function to toggle expandable content in a terminal row
+function toggleRowContent(rowId) {
+  const expandableDiv = document.getElementById(`${rowId}-expandable`);
+  const expandButton = document.querySelector(`#${rowId} .expand-button`);
+  
+  if (!expandableDiv || !expandButton) {
+    console.warn(`Could not find expandable content for row ${rowId}`);
+    return;
+  }
+  
+  const isExpanded = expandableDiv.style.display !== 'none';
+  
+  if (isExpanded) {
+    // Collapse
+    expandableDiv.style.display = 'none';
+    expandButton.innerHTML = '▶'; // Right arrow
+    expandButton.title = 'Click to expand';
+    console.log(`🗃️ Collapsed content for row ${rowId}`);
+  } else {
+    // Expand
+    expandableDiv.style.display = 'block';
+    expandButton.innerHTML = '▼'; // Down arrow
+    expandButton.title = 'Click to collapse';
+    console.log(`📜 Expanded content for row ${rowId}`);
+    
+    // Auto-scroll to keep the expanded content visible
+    setTimeout(() => {
+      expandableDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
+  }
+}
 
 // Function to update row count for a specific view
 function updateRowCount(viewId) {
@@ -967,26 +1047,18 @@ function readFileContent(file, viewId) {
     const lines = content.split('\n');
     const lineCount = lines.length;
     
-    // Display file info in first row
+    // Create expandable buffer content
+    const bufferContent = {
+      type: 'buffer',
+      title: `File Content: ${file.name}`,
+      lines: lineCount,
+      size: fileSize,
+      content: content
+    };
+    
+    // Display file info in first row with expandable content
     const fileInfo = `📄 ${file.name} (${fileSize}, ${lineCount} lines)`;
-    addTerminalEntry(fileInfo, viewId);
-    
-    // Add separator
-    addTerminalEntry('--- START ---', viewId);
-    
-    // Display content with preserved newlines (limit to prevent overwhelming)
-    const maxLines = 50;  // Show more lines since we're preserving formatting
-    const displayLines = lines.slice(0, maxLines);
-    
-    displayLines.forEach(line => {
-      addTerminalEntry(line || ' ', viewId, true); // Mark as file content and show empty lines as single space
-    });
-    
-    if (lines.length > maxLines) {
-      addTerminalEntry(`... (${lines.length - maxLines} more lines)`, viewId);
-    }
-    
-    addTerminalEntry('--- END ---', viewId);
+    addTerminalEntry(fileInfo, viewId, false, bufferContent);
   };
   
   reader.onerror = function() {
@@ -1028,26 +1100,18 @@ async function readTauriFileContent(filePath, viewId) {
     const lines = content.split('\n');
     const lineCount = lines.length;
     
-    // Display file info in first row
+    // Create expandable buffer content
+    const bufferContent = {
+      type: 'buffer',
+      title: `File Content: ${fileName}`,
+      lines: lineCount,
+      size: formattedSize,
+      content: content
+    };
+    
+    // Display file info in first row with expandable content
     const fileInfo = `📄 ${fileName} (${formattedSize}, ${lineCount} lines)`;
-    addTerminalEntry(fileInfo, viewId);
-    
-    // Add separator
-    addTerminalEntry('--- START ---', viewId);
-    
-    // Display content with preserved newlines (limit to prevent overwhelming)
-    const maxLines = 50;  // Show more lines since we're preserving formatting
-    const displayLines = lines.slice(0, maxLines);
-    
-    displayLines.forEach(line => {
-      addTerminalEntry(line || ' ', viewId, true); // Mark as file content and show empty lines as single space
-    });
-    
-    if (lines.length > maxLines) {
-      addTerminalEntry(`... (${lines.length - maxLines} more lines)`, viewId);
-    }
-    
-    addTerminalEntry('--- END ---', viewId);
+    addTerminalEntry(fileInfo, viewId, false, bufferContent);
   } catch (error) {
     addTerminalEntry(`❌ Error reading file ${fileName}: ${error.message}`, viewId);
   }
@@ -1406,3 +1470,32 @@ window.addEventListener("DOMContentLoaded", async () => {
 
 // Make functions global so they can be called from HTML
 window.closeView = closeView;
+window.toggleRowContent = toggleRowContent;
+
+// Helper function to add expandable entry with command output
+function addExpandableCommandOutput(command, output, exitCode, viewId) {
+  const outputContent = {
+    type: 'output',
+    title: `Command: ${command}`,
+    exitCode: exitCode,
+    content: output
+  };
+  
+  const summary = `🗺️ ${command} ${exitCode === 0 ? '✅' : '❌'} (Exit: ${exitCode})`;
+  return addTerminalEntry(summary, viewId, false, outputContent);
+}
+
+// Helper function to add expandable buffer content
+function addExpandableBuffer(title, content, metadata, viewId) {
+  const bufferContent = {
+    type: 'buffer',
+    title: title,
+    lines: content.split('\n').length,
+    size: new Blob([content]).size,
+    content: content,
+    ...metadata
+  };
+  
+  const summary = `🗄 ${title} (${bufferContent.lines} lines)`;
+  return addTerminalEntry(summary, viewId, false, bufferContent);
+}
