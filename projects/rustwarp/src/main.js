@@ -216,7 +216,14 @@ function toggleRowContent(rowId) {
   const isExpanded = expandableDiv.style.display !== 'none';
   
   if (isExpanded) {
-    // Collapse
+    // Collapse - clean up any search states for this content
+    const searchInputs = expandableDiv.querySelectorAll('.search-input');
+    searchInputs.forEach(input => {
+      if (input.id && searchState[input.id]) {
+        cleanupSearchState(input.id);
+      }
+    });
+    
     expandableDiv.style.display = 'none';
     expandButton.innerHTML = '▶'; // Right arrow
     expandButton.title = 'Click to expand';
@@ -1670,17 +1677,52 @@ function isTextFile(fileName) {
 // Search functionality for file content
 let searchState = {}; // Global search state
 
+// Function to clean up search state for a specific search instance
+function cleanupSearchState(searchId) {
+  if (searchState[searchId]) {
+    console.log(`🧹 Cleaning up search state for: ${searchId}`);
+    delete searchState[searchId];
+  }
+}
+
+// Function to clean up all orphaned search states (for maintenance)
+function cleanupOrphanedSearchStates() {
+  const validSearchIds = [];
+  document.querySelectorAll('.search-input').forEach(input => {
+    if (input.id) validSearchIds.push(input.id);
+  });
+  
+  Object.keys(searchState).forEach(searchId => {
+    if (!validSearchIds.includes(searchId)) {
+      console.log(`🧹 Removing orphaned search state: ${searchId}`);
+      delete searchState[searchId];
+    }
+  });
+}
+
 function setupFileSearch(searchId, contentId) {
   const searchInput = document.getElementById(searchId);
   const contentElement = document.getElementById(contentId);
   
   if (!searchInput || !contentElement) return;
   
-  // Initialize search state
+  // Pre-cache the original content to avoid issues with timing and DOM changes
+  const codeElement = contentElement.querySelector('code');
+  let originalContent = null;
+  
+  if (codeElement) {
+    // Prioritize data-original-content attribute which is set before syntax highlighting
+    originalContent = codeElement.dataset.originalContent || codeElement.textContent || '';
+    console.log(`🔍 Setting up search for ${searchId}, content length: ${originalContent.length}`);
+  } else {
+    console.warn(`🔍 No code element found for ${searchId}`);
+  }
+  
+  // Initialize search state with pre-cached content
   searchState[searchId] = {
     currentMatch: 0,
     totalMatches: 0,
-    originalContent: null,
+    originalContent: originalContent,
     contentElement: contentElement
   };
   
@@ -1731,14 +1773,43 @@ function performFileSearch(searchId, contentId, query) {
   const resultsElement = document.getElementById(`${searchId}-results`);
   const codeElement = contentElement.querySelector('code');
   
-  if (!contentElement || !codeElement) return;
+  if (!contentElement || !codeElement) {
+    console.warn(`🔍 Search elements not found - contentElement: ${!!contentElement}, codeElement: ${!!codeElement}`);
+    return;
+  }
   
-  // Store original content if not already stored
+  // Ensure search state exists
+  if (!searchState[searchId]) {
+    console.log(`🔍 Re-initializing search state for ${searchId}`);
+    setupFileSearch(searchId, contentId);
+    if (!searchState[searchId]) {
+      console.error(`🔍 Failed to initialize search state for ${searchId}`);
+      return;
+    }
+  }
+  
+  // Store original content if not already stored - prioritize data-original-content
   if (!searchState[searchId].originalContent) {
-    searchState[searchId].originalContent = codeElement.dataset.originalContent || codeElement.textContent;
+    // First try to get from data-original-content attribute (most reliable)
+    const dataOriginalContent = codeElement.dataset.originalContent;
+    if (dataOriginalContent) {
+      searchState[searchId].originalContent = dataOriginalContent;
+    } else {
+      // Fallback to textContent but clean it of any existing highlights
+      const textContent = codeElement.textContent || codeElement.innerText || '';
+      searchState[searchId].originalContent = textContent;
+    }
   }
   
   const originalContent = searchState[searchId].originalContent;
+  
+  // Ensure we have valid content to search
+  if (!originalContent) {
+    console.warn(`🔍 No original content found for search ${searchId}`);
+    return;
+  }
+  
+  console.log(`🔍 Searching "${query}" in ${originalContent.length} characters for ${searchId}`);
   
   if (!query.trim()) {
     // Clear search - restore original content
@@ -1771,20 +1842,22 @@ function performFileSearch(searchId, contentId, query) {
     resultsElement.textContent = `${searchState[searchId].currentMatch}/${matches.length}`;
     resultsElement.className = 'search-results has-matches';
     
-    // Highlight all matches
+    // Highlight all matches - process in reverse order to maintain correct indices
     let highlightedContent = originalContent;
-    let offset = 0;
     
-    matches.forEach((match, index) => {
-      const start = match.index + offset;
+    // Sort matches by index in descending order to process from end to beginning
+    const sortedMatches = [...matches].sort((a, b) => b.index - a.index);
+    
+    sortedMatches.forEach((match, reverseIndex) => {
+      const start = match.index;
       const end = start + match[0].length;
-      const isCurrentMatch = index === 0; // First match is current by default
+      const originalIndex = matches.indexOf(match); // Get original index for current match detection
+      const isCurrentMatch = originalIndex === 0; // First match in original order is current
       
       const highlightClass = isCurrentMatch ? 'search-highlight current-match' : 'search-highlight';
-      const replacement = `<span class="${highlightClass}" data-match-index="${index}">${escapeHtml(match[0])}</span>`;
+      const replacement = `<span class="${highlightClass}" data-match-index="${originalIndex}">${escapeHtml(match[0])}</span>`;
       
       highlightedContent = highlightedContent.slice(0, start) + replacement + highlightedContent.slice(end);
-      offset += replacement.length - match[0].length;
     });
     
     codeElement.innerHTML = highlightedContent;
@@ -2602,6 +2675,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   console.log('🔍 Setting up global drag and drop monitoring...');
   setupGlobalDragDropMonitoring();
   console.log('✅ Global drag and drop monitoring active');
+  
+  // Set up periodic cleanup for search states (every 30 seconds)
+  console.log('🧹 Setting up periodic search state cleanup...');
+  setInterval(() => {
+    cleanupOrphanedSearchStates();
+  }, 30000);
+  console.log('✅ Periodic search cleanup enabled');
   
   console.log('🎉 App initialization complete!');
   

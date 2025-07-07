@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Functionality Test</title>
+    <style>
+        .search-highlight {
+            background-color: rgba(255, 235, 59, 0.3);
+            border: 1px solid rgba(255, 235, 59, 0.6);
+        }
+        .search-highlight.current-match {
+            background-color: rgba(255, 87, 34, 0.4);
+            border: 1px solid rgba(255, 87, 34, 0.8);
+        }
+        .test-content {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .search-input {
+            width: 300px;
+            padding: 5px;
+            margin: 10px 0;
+        }
+        .search-results {
+            margin: 5px 0;
+            font-weight: bold;
+        }
+        .search-results.has-matches {
+            color: #1976D2;
+            background: rgba(25, 118, 210, 0.1);
+            padding: 2px 8px;
+            border-radius: 3px;
+        }
+        .search-results.no-matches {
+            color: #FF5722;
+            background: rgba(255, 87, 34, 0.1);
+            padding: 2px 8px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Search Functionality Test</h1>
+    
+    <div>
+        <input type="text" id="test-search" class="search-input" placeholder="Search for keywords...">
+        <span id="test-search-results" class="search-results"></span>
+    </div>
+    
+    <div class="test-content" id="test-content">
+        <pre><code data-original-content="function searchExample() {
+    const text = 'This is a sample text with keywords';
+    const keywords = ['sample', 'text', 'keywords'];
+    
+    keywords.forEach(keyword => {
+        console.log('Searching for:', keyword);
+        if (text.includes(keyword)) {
+            console.log('Found keyword:', keyword);
+        }
+    });
+    
+    return keywords;
+}
+
+// Another function with more text
+function anotherExample() {
+    const data = {
+        name: 'Test',
+        keywords: ['example', 'test', 'search'],
+        content: 'More sample content here'
+    };
+    
+    return data;
+}">function searchExample() {
+    const text = 'This is a sample text with keywords';
+    const keywords = ['sample', 'text', 'keywords'];
+    
+    keywords.forEach(keyword => {
+        console.log('Searching for:', keyword);
+        if (text.includes(keyword)) {
+            console.log('Found keyword:', keyword);
+        }
+    });
+    
+    return keywords;
+}
+
+// Another function with more text
+function anotherExample() {
+    const data = {
+        name: 'Test',
+        keywords: ['example', 'test', 'search'],
+        content: 'More sample content here'
+    };
+    
+    return data;
+}</code></pre>
+    </div>
+    
+    <div>
+        <p><strong>Test Instructions:</strong></p>
+        <ul>
+            <li>Type keywords like "function", "keyword", "sample", "test" to see them highlighted</li>
+            <li>Check if content remains visible when typing</li>
+            <li>Verify search results counter shows correct numbers</li>
+            <li>Clear search to see original content restored</li>
+        </ul>
+    </div>
+
+    <script>
+        // Mock search state (simplified version for testing)
+        let searchState = {};
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        function setupFileSearch(searchId, contentId) {
+            const searchInput = document.getElementById(searchId);
+            const contentElement = document.getElementById(contentId);
+            
+            if (!searchInput || !contentElement) return;
+            
+            const codeElement = contentElement.querySelector('code');
+            let originalContent = null;
+            
+            if (codeElement) {
+                originalContent = codeElement.dataset.originalContent || codeElement.textContent || '';
+                console.log(`🔍 Setting up search for ${searchId}, content length: ${originalContent.length}`);
+            } else {
+                console.warn(`🔍 No code element found for ${searchId}`);
+            }
+            
+            searchState[searchId] = {
+                currentMatch: 0,
+                totalMatches: 0,
+                originalContent: originalContent,
+                contentElement: contentElement
+            };
+            
+            searchInput.addEventListener('input', (e) => {
+                performFileSearch(searchId, contentId, e.target.value);
+            });
+        }
+
+        function performFileSearch(searchId, contentId, query) {
+            const contentElement = document.getElementById(contentId);
+            const resultsElement = document.getElementById(`${searchId}-results`);
+            const codeElement = contentElement.querySelector('code');
+            
+            if (!contentElement || !codeElement) {
+                console.warn(`🔍 Search elements not found - contentElement: ${!!contentElement}, codeElement: ${!!codeElement}`);
+                return;
+            }
+            
+            if (!searchState[searchId]) {
+                console.log(`🔍 Re-initializing search state for ${searchId}`);
+                setupFileSearch(searchId, contentId);
+                if (!searchState[searchId]) {
+                    console.error(`🔍 Failed to initialize search state for ${searchId}`);
+                    return;
+                }
+            }
+            
+            if (!searchState[searchId].originalContent) {
+                const dataOriginalContent = codeElement.dataset.originalContent;
+                if (dataOriginalContent) {
+                    searchState[searchId].originalContent = dataOriginalContent;
+                } else {
+                    const textContent = codeElement.textContent || codeElement.innerText || '';
+                    searchState[searchId].originalContent = textContent;
+                }
+            }
+            
+            const originalContent = searchState[searchId].originalContent;
+            
+            if (!originalContent) {
+                console.warn(`🔍 No original content found for search ${searchId}`);
+                return;
+            }
+            
+            console.log(`🔍 Searching "${query}" in ${originalContent.length} characters for ${searchId}`);
+            
+            if (!query.trim()) {
+                codeElement.innerHTML = escapeHtml(originalContent);
+                resultsElement.textContent = '';
+                searchState[searchId].currentMatch = 0;
+                searchState[searchId].totalMatches = 0;
+                return;
+            }
+            
+            const regex = new RegExp(escapeRegExp(query), 'gi');
+            const matches = [...originalContent.matchAll(regex)];
+            
+            searchState[searchId].totalMatches = matches.length;
+            searchState[searchId].currentMatch = matches.length > 0 ? 1 : 0;
+            
+            if (matches.length === 0) {
+                resultsElement.textContent = 'No matches';
+                resultsElement.className = 'search-results no-matches';
+                codeElement.innerHTML = escapeHtml(originalContent);
+            } else {
+                resultsElement.textContent = `${searchState[searchId].currentMatch}/${matches.length}`;
+                resultsElement.className = 'search-results has-matches';
+                
+                let highlightedContent = originalContent;
+                
+                const sortedMatches = [...matches].sort((a, b) => b.index - a.index);
+                
+                sortedMatches.forEach((match, reverseIndex) => {
+                    const start = match.index;
+                    const end = start + match[0].length;
+                    const originalIndex = matches.indexOf(match);
+                    const isCurrentMatch = originalIndex === 0;
+                    
+                    const highlightClass = isCurrentMatch ? 'search-highlight current-match' : 'search-highlight';
+                    const replacement = `<span class="${highlightClass}" data-match-index="${originalIndex}">${escapeHtml(match[0])}</span>`;
+                    
+                    highlightedContent = highlightedContent.slice(0, start) + replacement + highlightedContent.slice(end);
+                });
+                
+                codeElement.innerHTML = highlightedContent;
+            }
+        }
+
+        // Initialize the test search
+        document.addEventListener('DOMContentLoaded', function() {
+            setupFileSearch('test-search', 'test-content');
+            console.log('🧪 Test search functionality initialized');
+        });
+    </script>
+</body>
+</html>
