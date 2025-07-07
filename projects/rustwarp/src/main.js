@@ -10,7 +10,7 @@ const CONFIG_FILE = 'config.json';
 // Configuration object
 let config = {
   fontSize: 13,
-  searchDisabled: false  // Flag to temporarily disable search functionality
+  searchDisabled: true  // Flag to temporarily disable search functionality
 };
 
 // Popup state
@@ -79,9 +79,12 @@ function addTerminalEntry(text, viewId, isFileContent = false, expandableContent
       const syntaxHighlightingBadge = langPreset && langPreset.prismLang ? 
         `<span class="syntax-badge" title="Syntax highlighting enabled for ${langPreset.name}">✨ Highlighted</span>` : '';
       
+      const searchDisabledBadge = config.searchDisabled ? 
+        `<span class="search-disabled-badge" title="Search functionality is disabled. Use 'enable search' to enable it." style="background: #ff6b6b; color: white; font-size: 0.7em; padding: 2px 6px; border-radius: 10px; margin-left: 8px;">🚫 Search Off</span>` : '';
+      
       const headerContent = langPreset ? 
-        `<span class="lang-icon">${langPreset.icon}</span> ${expandableContent.title || 'Buffer Content'} <span class="lang-name" style="color: ${langPreset.color}; font-size: 0.8em; opacity: 0.7;">${langPreset.name}</span> ${syntaxHighlightingBadge}` :
-        expandableContent.title || 'Buffer Content';
+        `<span class="lang-icon">${langPreset.icon}</span> ${expandableContent.title || 'Buffer Content'} <span class="lang-name" style="color: ${langPreset.color}; font-size: 0.8em; opacity: 0.7;">${langPreset.name}</span> ${syntaxHighlightingBadge}${searchDisabledBadge}` :
+        `${expandableContent.title || 'Buffer Content'}${searchDisabledBadge}`;
       
       const searchId = `search-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const contentId = `content-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -99,17 +102,19 @@ function addTerminalEntry(text, viewId, isFileContent = false, expandableContent
               <span class="buffer-info">${expandableContent.lines || 0} lines, ${expandableContent.size || 'unknown size'}</span>
             </div>
             ${largeFileWarning}
+            ${config.searchDisabled ? '' : `
             <div class="buffer-search-row">
               <div class="search-container">
-                <input type="text" id="${searchId}" class="search-input" placeholder="${config.searchDisabled ? 'Search temporarily disabled' : (isLargeFile ? 'Search in large file (optimized)...' : 'Search in file...')}" ${config.searchDisabled ? 'disabled readonly' : ''} />
-                <button class="search-clear" onclick="clearFileSearch('${searchId}', '${contentId}')" title="Clear search" ${config.searchDisabled ? 'disabled' : ''}>✕</button>
+                <input type="text" id="${searchId}" class="search-input" placeholder="${isLargeFile ? 'Search in large file (optimized)...' : 'Search in file...'}" />
+                <button class="search-clear" onclick="clearFileSearch('${searchId}', '${contentId}')" title="Clear search">✕</button>
                 <span class="search-results" id="${searchId}-results"></span>
                 <div class="search-nav">
-                  <button class="search-prev" onclick="navigateSearch('${searchId}', '${contentId}', -1)" title="Previous match" ${config.searchDisabled ? 'disabled' : ''}>↑</button>
-                  <button class="search-next" onclick="navigateSearch('${searchId}', '${contentId}', 1)" title="Next match" ${config.searchDisabled ? 'disabled' : ''}>↓</button>
+                  <button class="search-prev" onclick="navigateSearch('${searchId}', '${contentId}', -1)" title="Previous match">↑</button>
+                  <button class="search-next" onclick="navigateSearch('${searchId}', '${contentId}', 1)" title="Next match">↓</button>
                 </div>
               </div>
             </div>
+            `}
           </div>
           <div class="buffer-content ${langClass}" style="${contentStyle}" id="${contentId}">
             <pre><code class="language-${langPreset ? langPreset.prismLang || 'text' : 'text'}" data-original-content="${escapeHtml(expandableContent.content)}">${escapeHtml(expandableContent.content)}</code></pre>
@@ -578,27 +583,35 @@ async function loadConfig() {
     const configData = await readTextFile(CONFIG_FILE, { 
       baseDir: BaseDirectory.AppConfig 
     });
-    config = JSON.parse(configData);
+    const loadedConfig = JSON.parse(configData);
     
     // Apply loaded font size
-    if (config.fontSize && config.fontSize >= minFontSize && config.fontSize <= maxFontSize) {
-      currentFontSize = config.fontSize;
+    if (loadedConfig.fontSize && loadedConfig.fontSize >= minFontSize && loadedConfig.fontSize <= maxFontSize) {
+      currentFontSize = loadedConfig.fontSize;
+      config.fontSize = loadedConfig.fontSize;
       console.log(`✅ Loaded font size: ${currentFontSize}px`);
     } else {
       console.log('⚠️ Invalid font size in config, using default');
       currentFontSize = 13;
       config.fontSize = 13;
-      // Don't await saveConfig to prevent blocking
-      saveConfig().catch(err => console.log('Failed to save default config:', err));
+    }
+    
+    // Apply loaded search disabled state
+    if (typeof loadedConfig.searchDisabled === 'boolean') {
+      config.searchDisabled = loadedConfig.searchDisabled;
+      console.log(`✅ Loaded search disabled state: ${config.searchDisabled}`);
+    } else {
+      console.log('⚠️ No search disabled state in config, using default: true');
+      config.searchDisabled = true;
     }
   } catch (error) {
     console.log('📁 No existing config found, creating default config');
     // Create default config
-    config = { fontSize: 13 };
+    config = { fontSize: 13, searchDisabled: true };
     currentFontSize = 13;
     // Don't await saveConfig to prevent blocking
     saveConfig().catch(err => console.log('Failed to save default config:', err));
-    console.log(`✅ Created default config with font size: ${currentFontSize}px`);
+    console.log(`✅ Created default config with font size: ${currentFontSize}px, search disabled: ${config.searchDisabled}`);
   }
 }
 
@@ -612,20 +625,29 @@ async function saveConfig() {
   try {
     const { writeTextFile, BaseDirectory } = window.__TAURI__.fs;
     config.fontSize = currentFontSize;
-    await writeTextFile(CONFIG_FILE, JSON.stringify(config, null, 2), {
+    // Ensure searchDisabled is included in saved config
+    const configToSave = {
+      fontSize: config.fontSize,
+      searchDisabled: config.searchDisabled
+    };
+    await writeTextFile(CONFIG_FILE, JSON.stringify(configToSave, null, 2), {
       baseDir: BaseDirectory.AppConfig
     });
-    console.log(`💾 Saved font size: ${currentFontSize}px`);
+    console.log(`💾 Saved config - font size: ${currentFontSize}px, search disabled: ${config.searchDisabled}`);
   } catch (error) {
     console.error('❌ Failed to save config:', error);
     // Try to create the directory first and retry
     try {
       const { mkdir, BaseDirectory } = window.__TAURI__.fs;
       await mkdir('', { baseDir: BaseDirectory.AppConfig, recursive: true });
-      await writeTextFile(CONFIG_FILE, JSON.stringify(config, null, 2), {
+      const configToSave = {
+        fontSize: config.fontSize,
+        searchDisabled: config.searchDisabled
+      };
+      await writeTextFile(CONFIG_FILE, JSON.stringify(configToSave, null, 2), {
         baseDir: BaseDirectory.AppConfig
       });
-      console.log(`💾 Created directory and saved font size: ${currentFontSize}px`);
+      console.log(`💾 Created directory and saved config - font size: ${currentFontSize}px, search disabled: ${config.searchDisabled}`);
     } catch (retryError) {
       console.error('❌ Failed to save config even after creating directory:', retryError);
     }
@@ -1717,24 +1739,15 @@ function toggleSearchFunctionality(disabled = null) {
   const status = config.searchDisabled ? '🚫 DISABLED' : '✅ ENABLED';
   console.log(`🔍 Search functionality ${status}`);
   
-  // Update existing search inputs
-  document.querySelectorAll('.search-input').forEach(input => {
+  // Show/hide existing search containers instead of just disabling them
+  document.querySelectorAll('.buffer-search-row').forEach(searchRow => {
     if (config.searchDisabled) {
-      input.disabled = true;
-      input.readOnly = true;
-      input.placeholder = 'Search temporarily disabled';
-      input.value = '';
+      searchRow.style.display = 'none';
+      console.log('🚫 Hidden search container');
     } else {
-      input.disabled = false;
-      input.readOnly = false;
-      input.placeholder = input.placeholder.includes('large file') ? 
-        'Search in large file (optimized)...' : 'Search in file...';
+      searchRow.style.display = 'block';
+      console.log('✅ Shown search container');
     }
-  });
-  
-  // Update search buttons
-  document.querySelectorAll('.search-clear, .search-prev, .search-next').forEach(button => {
-    button.disabled = config.searchDisabled;
   });
   
   // Clear any active searches if disabling
@@ -1743,6 +1756,9 @@ function toggleSearchFunctionality(disabled = null) {
       cleanupSearchState(searchId);
     });
   }
+  
+  // Save the config to persist the search disabled state
+  saveConfig().catch(err => console.log('Failed to save search disabled state:', err));
   
   return config.searchDisabled;
 }
@@ -1822,6 +1838,12 @@ function setupFileSearch(searchId, contentId) {
   // Add search event listener with input debouncing for large files
   let inputTimeout;
   searchInput.addEventListener('input', (e) => {
+    // Check if search is disabled before processing
+    if (config.searchDisabled) {
+      console.log(`🚫 Search disabled - ignoring input event`);
+      return;
+    }
+    
     if (inputTimeout) clearTimeout(inputTimeout);
     
     // Use shorter delay for small files, longer for large files
@@ -1845,8 +1867,13 @@ function setupFileSearch(searchId, contentId) {
   // Handle click events to ensure proper focus
   searchInput.addEventListener('click', (e) => {
     e.stopPropagation();
-    searchInput.focus();
-    console.log('🔍 Search input clicked and focused');
+    // Only focus if search is not disabled
+    if (!config.searchDisabled) {
+      searchInput.focus();
+      console.log('🔍 Search input clicked and focused');
+    } else {
+      console.log('🚫 Search disabled - click ignored');
+    }
   });
   
   // Prevent parent elements from interfering
@@ -1856,6 +1883,13 @@ function setupFileSearch(searchId, contentId) {
   
   // Add keyboard shortcuts
   searchInput.addEventListener('keydown', (e) => {
+    // Check if search is disabled before processing keyboard shortcuts
+    if (config.searchDisabled) {
+      console.log(`🚫 Search disabled - ignoring keyboard shortcut`);
+      e.preventDefault(); // Prevent any action
+      return;
+    }
+    
     if (e.key === 'Enter') {
       e.preventDefault();
       navigateSearch(searchId, contentId, e.shiftKey ? -1 : 1);
@@ -1870,6 +1904,12 @@ function setupFileSearch(searchId, contentId) {
 }
 
 function performFileSearch(searchId, contentId, query) {
+  // Check if search is disabled globally
+  if (config.searchDisabled) {
+    console.log(`🚫 Search disabled - ignoring search request for ${searchId}`);
+    return;
+  }
+  
   const contentElement = document.getElementById(contentId);
   const resultsElement = document.getElementById(`${searchId}-results`);
   const codeElement = contentElement.querySelector('code');
@@ -2086,6 +2126,12 @@ function highlightMatches(matches, originalContent, codeElement) {
 }
 
 function navigateSearch(searchId, contentId, direction) {
+  // Check if search is disabled globally
+  if (config.searchDisabled) {
+    console.log(`🚫 Search disabled - ignoring navigation request for ${searchId}`);
+    return;
+  }
+  
   const state = searchState[searchId];
   if (!state || state.totalMatches === 0) return;
   
@@ -2117,6 +2163,12 @@ function navigateSearch(searchId, contentId, direction) {
 }
 
 function clearFileSearch(searchId, contentId) {
+  // Check if search is disabled globally
+  if (config.searchDisabled) {
+    console.log(`🚫 Search disabled - ignoring clear request for ${searchId}`);
+    return;
+  }
+  
   const searchInput = document.getElementById(searchId);
   if (searchInput) {
     // Cancel any pending search operations
@@ -2839,23 +2891,23 @@ function setupDragAndDropListeners(viewId) {
   viewPanel.addEventListener('dragleave', handleDragLeave, false);
   viewPanel.addEventListener('drop', handleDrop, false);
   
-  // Add click activation listeners (changed from hover)
-  viewPanel.addEventListener('click', (e) => {
-    console.log(`🐭 Mouse click view ${viewId}`);
-    autoActivateView(viewId, false);
-  }, false);
+  // Add click activation listeners (changed from hover) - DISABLED
+  // viewPanel.addEventListener('click', (e) => {
+  //   console.log(`🐭 Mouse click view ${viewId}`);
+  //   autoActivateView(viewId, false);
+  // }, false);
   
-  // Add mouse down listener to focus input
-  viewPanel.addEventListener('mousedown', (e) => {
-    console.log(`🐭 Mouse down view ${viewId}`);
-    const viewInfo = viewData[viewId];
-    if (viewInfo && viewInfo.textInputEl) {
-      viewInfo.textInputEl.focus();
-      console.log(`🎯 Mouse down - focused input for view ${viewId}`);
-    }
-  }, false);
+  // Add mouse down listener to focus input - DISABLED
+  // viewPanel.addEventListener('mousedown', (e) => {
+  //   console.log(`🐭 Mouse down view ${viewId}`);
+  //   const viewInfo = viewData[viewId];
+  //   if (viewInfo && viewInfo.textInputEl) {
+  //     viewInfo.textInputEl.focus();
+  //     console.log(`🎯 Mouse down - focused input for view ${viewId}`);
+  //   }
+  // }, false);
   
-  // Add hover listeners to switch views without focusing
+  // Add hover listeners to switch views without focusing - RE-ENABLED
   viewPanel.addEventListener('mouseenter', (e) => {
     console.log(`🐭 Mouse enter view ${viewId}`);
     // Switch to this view but don't focus input
@@ -2874,16 +2926,17 @@ function setupDragAndDropListeners(viewId) {
     console.log(`🎯 Hover switched to view ${viewId} (no focus)`);
   }, false);
   
-  viewPanel.addEventListener('mouseleave', (e) => {
-    console.log(`🐭 Mouse leave view ${viewId}`);
-    // Keep the view active for better UX - don't remove active state on mouse leave
-  }, false);
+  // viewPanel.addEventListener('mouseleave', (e) => {
+  //   console.log(`🐭 Mouse leave view ${viewId}`);
+  //   // Keep the view active for better UX - don't remove active state on mouse leave
+  // }, false);
   
   // Make the view panel accept drops
   viewPanel.style.position = 'relative';
   
   console.log(`✅ Drag and drop setup complete for view-${viewId}`);
-  console.log(`📝 Event listeners added: dragover, dragenter, dragleave, drop`);
+  console.log(`📝 Event listeners added: dragover, dragenter, dragleave, drop, mouseenter`);
+  console.log(`🚫 Mouse click/down disabled, ✅ hover enabled: views switch on mouse enter`);
 }
 
 // Function to initialize a view with event listeners
