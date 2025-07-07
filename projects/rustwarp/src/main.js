@@ -85,6 +85,11 @@ function addTerminalEntry(text, viewId, isFileContent = false, expandableContent
       const searchId = `search-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const contentId = `content-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
+      // Check if this is a large file and add performance indicators
+      const isLargeFile = expandableContent.content && expandableContent.content.length > 50000;
+      const largeFileWarning = isLargeFile ? 
+        `<div class="large-file-warning">⚡ Large file detected (${expandableContent.content.length} chars) - search optimizations enabled</div>` : '';
+      
       expandableDiv.innerHTML = `
         <div class="expandable-buffer">
           <div class="buffer-header">
@@ -92,9 +97,10 @@ function addTerminalEntry(text, viewId, isFileContent = false, expandableContent
               <span class="buffer-title">${headerContent}</span>
               <span class="buffer-info">${expandableContent.lines || 0} lines, ${expandableContent.size || 'unknown size'}</span>
             </div>
+            ${largeFileWarning}
             <div class="buffer-search-row">
               <div class="search-container">
-                <input type="text" id="${searchId}" class="search-input" placeholder="Search in file..." />
+                <input type="text" id="${searchId}" class="search-input" placeholder="${isLargeFile ? 'Search in large file (optimized)...' : 'Search in file...'}" />
                 <button class="search-clear" onclick="clearFileSearch('${searchId}', '${contentId}')" title="Clear search">✕</button>
                 <span class="search-results" id="${searchId}-results"></span>
                 <div class="search-nav">
@@ -110,18 +116,29 @@ function addTerminalEntry(text, viewId, isFileContent = false, expandableContent
         </div>
       `;
       
-      // Apply syntax highlighting after DOM insertion
+      // Apply syntax highlighting after DOM insertion with optimizations for large files
       setTimeout(() => {
         if (window.Prism) {
           const codeElements = expandableDiv.querySelectorAll('pre code');
           codeElements.forEach(code => {
-            window.Prism.highlightElement(code);
+            // For very large files, skip syntax highlighting to improve performance
+            const contentLength = code.textContent.length;
+            if (contentLength > 100000) {
+              console.log(`⚡ Skipping syntax highlighting for very large file (${contentLength} chars)`);
+              code.className = 'language-text'; // Use plain text highlighting
+            } else if (contentLength > 50000) {
+              console.log(`⚡ Using basic syntax highlighting for large file (${contentLength} chars)`);
+              // Use a timeout to prevent blocking
+              setTimeout(() => window.Prism.highlightElement(code), 100);
+            } else {
+              window.Prism.highlightElement(code);
+            }
           });
         }
         
         // Setup search functionality
         setupFileSearch(searchId, contentId);
-      }, 10);
+      }, isLargeFile ? 100 : 10); // Longer delay for large files
     } else if (expandableContent.type === 'output') {
       expandableDiv.innerHTML = `
         <div class="expandable-output">
@@ -1723,12 +1740,26 @@ function setupFileSearch(searchId, contentId) {
     currentMatch: 0,
     totalMatches: 0,
     originalContent: originalContent,
-    contentElement: contentElement
+    contentElement: contentElement,
+    searchTimeout: null,
+    isLargeFile: originalContent ? originalContent.length > 50000 : false // Files larger than 50KB
   };
   
-  // Add search event listener
+  if (searchState[searchId].isLargeFile) {
+    console.log(`📊 Large file detected (${originalContent.length} chars), enabling optimizations`);
+  }
+  
+  // Add search event listener with input debouncing for large files
+  let inputTimeout;
   searchInput.addEventListener('input', (e) => {
-    performFileSearch(searchId, contentId, e.target.value);
+    if (inputTimeout) clearTimeout(inputTimeout);
+    
+    // Use shorter delay for small files, longer for large files
+    const delay = searchState[searchId].isLargeFile ? 200 : 50;
+    
+    inputTimeout = setTimeout(() => {
+      performFileSearch(searchId, contentId, e.target.value);
+    }, delay);
   });
   
   // Prevent the main input from stealing focus when search is active
@@ -1788,6 +1819,11 @@ function performFileSearch(searchId, contentId, query) {
     }
   }
   
+  // Cancel any pending search operation
+  if (searchState[searchId].searchTimeout) {
+    clearTimeout(searchState[searchId].searchTimeout);
+  }
+  
   // Store original content if not already stored - prioritize data-original-content
   if (!searchState[searchId].originalContent) {
     // First try to get from data-original-content attribute (most reliable)
@@ -1827,51 +1863,122 @@ function performFileSearch(searchId, contentId, query) {
     return;
   }
   
-  // Perform case-insensitive search
-  const regex = new RegExp(escapeRegExp(query), 'gi');
-  const matches = [...originalContent.matchAll(regex)];
+  // For large files, use debounced search to prevent UI blocking
+  const isLargeFile = searchState[searchId].isLargeFile;
+  const searchDelay = isLargeFile ? 150 : 50; // Optimized delays
   
-  searchState[searchId].totalMatches = matches.length;
-  searchState[searchId].currentMatch = matches.length > 0 ? 1 : 0;
+  if (isLargeFile) {
+    // Show loading indicator for large files
+    resultsElement.textContent = '🔍 Searching...';
+    resultsElement.className = 'search-results searching';
+  }
   
-  if (matches.length === 0) {
-    resultsElement.textContent = 'No matches';
+  // Debounced search execution
+  searchState[searchId].searchTimeout = setTimeout(() => {
+    performActualSearch(searchId, contentId, query, originalContent, codeElement, resultsElement);
+  }, searchDelay);
+  
+}
+
+// Separate function to perform the actual search (can be called asynchronously)
+function performActualSearch(searchId, contentId, query, originalContent, codeElement, resultsElement) {
+  const startTime = performance.now();
+  const isLargeFile = searchState[searchId].isLargeFile;
+  
+  try {
+    // Perform case-insensitive search
+    const regex = new RegExp(escapeRegExp(query), 'gi');
+    const matches = [...originalContent.matchAll(regex)];
+    
+    searchState[searchId].totalMatches = matches.length;
+    searchState[searchId].currentMatch = matches.length > 0 ? 1 : 0;
+    
+    if (matches.length === 0) {
+      resultsElement.textContent = 'No matches';
+      resultsElement.className = 'search-results no-matches';
+      codeElement.innerHTML = escapeHtml(originalContent);
+    } else {
+      resultsElement.textContent = `${searchState[searchId].currentMatch}/${matches.length}`;
+      resultsElement.className = 'search-results has-matches';
+      
+      // For large files with many matches, limit highlighting to prevent performance issues
+      const maxHighlights = isLargeFile ? 500 : matches.length; // Reduced for better performance
+      const matchesToHighlight = matches.slice(0, maxHighlights);
+      
+      if (matches.length > maxHighlights) {
+        console.log(`⚡ Limiting highlights to ${maxHighlights} matches for performance`);
+        resultsElement.textContent += ` (first ${maxHighlights} shown)`;
+      }
+      
+      // Use requestAnimationFrame for better performance on large files
+      if (isLargeFile) {
+        requestAnimationFrame(() => {
+          highlightMatches(matchesToHighlight, originalContent, codeElement);
+          scrollToCurrentMatch(contentId);
+        });
+      } else {
+        highlightMatches(matchesToHighlight, originalContent, codeElement);
+        scrollToCurrentMatch(contentId);
+      }
+    }
+    
+    // Re-apply syntax highlighting while preserving search highlights
+    setTimeout(() => {
+      if (window.Prism && matches.length === 0) {
+        window.Prism.highlightElement(codeElement);
+      }
+    }, 10);
+    
+    const endTime = performance.now();
+    console.log(`🔍 Search completed in ${(endTime - startTime).toFixed(2)}ms for ${matches.length} matches`);
+    
+  } catch (error) {
+    console.error('🔍 Search error:', error);
+    resultsElement.textContent = 'Search error';
     resultsElement.className = 'search-results no-matches';
-    codeElement.innerHTML = escapeHtml(originalContent);
-  } else {
-    resultsElement.textContent = `${searchState[searchId].currentMatch}/${matches.length}`;
-    resultsElement.className = 'search-results has-matches';
+  }
+}
+
+// Optimized highlighting function
+function highlightMatches(matches, originalContent, codeElement) {
+  // Process matches in chunks to prevent UI blocking
+  const chunkSize = 100;
+  let highlightedContent = originalContent;
+  
+  // Sort matches by index in descending order to process from end to beginning
+  const sortedMatches = [...matches].sort((a, b) => b.index - a.index);
+  
+  // Process matches in chunks using setTimeout to prevent blocking
+  function processChunk(startIndex) {
+    const endIndex = Math.min(startIndex + chunkSize, sortedMatches.length);
     
-    // Highlight all matches - process in reverse order to maintain correct indices
-    let highlightedContent = originalContent;
-    
-    // Sort matches by index in descending order to process from end to beginning
-    const sortedMatches = [...matches].sort((a, b) => b.index - a.index);
-    
-    sortedMatches.forEach((match, reverseIndex) => {
+    for (let i = startIndex; i < endIndex; i++) {
+      const match = sortedMatches[i];
       const start = match.index;
       const end = start + match[0].length;
-      const originalIndex = matches.indexOf(match); // Get original index for current match detection
-      const isCurrentMatch = originalIndex === 0; // First match in original order is current
+      const originalIndex = matches.indexOf(match);
+      const isCurrentMatch = originalIndex === 0;
       
       const highlightClass = isCurrentMatch ? 'search-highlight current-match' : 'search-highlight';
       const replacement = `<span class="${highlightClass}" data-match-index="${originalIndex}">${escapeHtml(match[0])}</span>`;
       
       highlightedContent = highlightedContent.slice(0, start) + replacement + highlightedContent.slice(end);
-    });
+    }
     
-    codeElement.innerHTML = highlightedContent;
-    
-    // Scroll to first match
-    scrollToCurrentMatch(contentId);
+    // Update DOM with current progress
+    if (endIndex < sortedMatches.length) {
+      // Continue processing in next frame
+      setTimeout(() => processChunk(endIndex), 0);
+    } else {
+      // Finished processing all matches
+      codeElement.innerHTML = highlightedContent;
+    }
   }
   
-  // Re-apply syntax highlighting while preserving search highlights
-  setTimeout(() => {
-    if (window.Prism && matches.length === 0) {
-      window.Prism.highlightElement(codeElement);
-    }
-  }, 10);
+  // Start processing
+  if (sortedMatches.length > 0) {
+    processChunk(0);
+  }
 }
 
 function navigateSearch(searchId, contentId, direction) {
@@ -1908,12 +2015,30 @@ function navigateSearch(searchId, contentId, direction) {
 function clearFileSearch(searchId, contentId) {
   const searchInput = document.getElementById(searchId);
   if (searchInput) {
+    // Cancel any pending search operations
+    if (searchState[searchId] && searchState[searchId].searchTimeout) {
+      clearTimeout(searchState[searchId].searchTimeout);
+    }
+    
     searchInput.value = '';
-    performFileSearch(searchId, contentId, '');
-    // Ensure focus stays on search input after clearing
+    
+    // For large files, show clearing indicator
+    const resultsElement = document.getElementById(`${searchId}-results`);
+    if (searchState[searchId] && searchState[searchId].isLargeFile && resultsElement) {
+      resultsElement.textContent = '🧹 Clearing...';
+      resultsElement.className = 'search-results searching';
+    }
+    
+    // Use a small delay for large files to show the clearing indicator
+    const delay = (searchState[searchId] && searchState[searchId].isLargeFile) ? 100 : 0;
+    
     setTimeout(() => {
-      searchInput.focus();
-    }, 10);
+      performFileSearch(searchId, contentId, '');
+      // Ensure focus stays on search input after clearing
+      setTimeout(() => {
+        searchInput.focus();
+      }, 10);
+    }, delay);
   }
 }
 
