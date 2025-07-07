@@ -1,0 +1,4 @@
+command: update
+description: Update YAML popup command files
+example: update
+category: system

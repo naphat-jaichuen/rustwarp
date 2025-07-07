@@ -1,14 +1,52 @@
 use std::path::Path;
 use std::fs;
+use std::time::SystemTime;
 use base64::{Engine as _, engine::general_purpose};
+use serde::Serialize;
 
 mod extensions;
 use extensions::{ExtensionManager, get_available_extensions, execute_extension_command, check_extension_exists};
+
+#[derive(Serialize)]
+struct FileMetadata {
+    modified_time: u64,
+    size: u64,
+    is_file: bool,
+    is_dir: bool,
+}
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+// Get file metadata including modification time
+#[tauri::command]
+fn get_file_metadata(path: &str) -> Result<FileMetadata, String> {
+    let path_obj = Path::new(path);
+    
+    if !path_obj.exists() {
+        return Err(format!("Path does not exist: {}", path));
+    }
+    
+    match fs::metadata(path) {
+        Ok(metadata) => {
+            let modified_time = metadata.modified()
+                .unwrap_or(SystemTime::UNIX_EPOCH)
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+                
+            Ok(FileMetadata {
+                modified_time,
+                size: metadata.len(),
+                is_file: metadata.is_file(),
+                is_dir: metadata.is_dir(),
+            })
+        },
+        Err(e) => Err(format!("Failed to read file metadata: {}", e))
+    }
 }
 
 // Check if a path is a directory
@@ -107,6 +145,7 @@ pub fn run() {
         .manage(extension_manager)
         .invoke_handler(tauri::generate_handler![
             greet, 
+            get_file_metadata,
             is_directory, 
             handle_directory, 
             read_image_file,

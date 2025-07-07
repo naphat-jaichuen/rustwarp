@@ -1,8 +1,8 @@
 command: findall
-description: Find keywords in filtered files or all files in the current directory
+description: Find a keyword or many separated by space in the given filtered files or all files in the current directory. If no keyword is provided, it will start editor to get from user then prompt to confirm the searching.
 example: findall function variable in *.c *.h
 category: file-search
-usage: findall [keyword...] in [pattern...]
+usage: findall [keyword...] in [filtered file...]
 options:
   - name: keyword
     type: string
@@ -16,5 +16,3 @@ options:
       - "class"
 subcommands:
   - in
-  - recursive
-  - case-sensitive

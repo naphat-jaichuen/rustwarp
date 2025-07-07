@@ -15,6 +15,7 @@ let config = {
 // Popup state
 let selectedPopupIndex = -1;
 let popupData = []; // Will be loaded from JSON file
+let yamlFileTimestamps = {}; // Track file modification times
 
 // Initialize view data
 function initializeViewData(viewId) {
@@ -300,7 +301,13 @@ function handleEnterKey(event) {
     const text = event.target.value.trim();
     console.log('✅ Enter pressed, text:', text, 'viewId:', viewId);
     if (text) {
-      addTerminalEntry(text, viewId);
+      // Check for special commands
+      if (text.toLowerCase() === 'update') {
+        addTerminalEntry(text, viewId);
+        reloadPopupData();
+      } else {
+        addTerminalEntry(text, viewId);
+      }
     }
   }
 }
@@ -356,7 +363,7 @@ async function loadPopupData() {
     
     // List of main command files to load
     const mainCommands = [
-      'findall', 'install', 'get', 'run', 'zip', 'unzip', 'ci', 'create', 'register'
+      'findall', 'install', 'get', 'run', 'zip', 'unzip', 'ci', 'create', 'register', 'update'
     ];
     
     console.log('🔧 Loading command data from YAML files...');
@@ -473,6 +480,13 @@ async function loadPopupData() {
         
         popupData.push(popupCommand);
         console.log(`✅ Loaded command: ${commandName}`);
+        
+        // Store initial file timestamp
+        const filePath = window.__TAURI__ ? `data/command/${commandName}.yml` : `./data/command/${commandName}.yml`;
+        const modTime = await getFileModTime(filePath);
+        if (modTime) {
+          yamlFileTimestamps[filePath] = modTime;
+        }
         
       } catch (commandError) {
         console.warn(`⚠️ Could not load command ${commandName}:`, commandError.message);
@@ -687,6 +701,11 @@ function handleGlobalKeydown(event) {
       updateTerminalFontSize();
       saveConfig();
       return;
+    } else if (event.key === 'r' || event.key === 'R') {
+      // Update popup data (Ctrl/Cmd + R)
+      event.preventDefault();
+      reloadPopupData();
+      return;
     }
   }
   
@@ -810,8 +829,21 @@ function setupScrollbarMonitoring() {
 }
 
 // Function to create a new view
-function createNewView() {
+async function createNewView() {
   console.log('🔨 Starting createNewView...');
+  
+  // Check if YAML files have changed and reload only if necessary
+  console.log('🔍 Checking for YAML file changes before creating new view...');
+  try {
+    const reloaded = await reloadPopupDataIfChanged();
+    if (reloaded) {
+      console.log('✅ YAML files were updated for new view');
+    } else {
+      console.log('✅ Using cached YAML data for new view');
+    }
+  } catch (error) {
+    console.warn('⚠️ Failed to check YAML file changes for new view:', error);
+  }
   
   const viewContainer = document.querySelector('#view-container');
   console.log('📆 View container found:', !!viewContainer);
@@ -2479,10 +2511,10 @@ function initializeView(viewId) {
 }
 
 // Function to handle floating button click
-function handleFloatingButtonClick() {
-  console.log('➕ Floating button clicked!');
+async function handleFloatingButtonClick() {
+  console.log('➡️ Floating button clicked!');
   try {
-    createNewView();
+    await createNewView();
     console.log('✅ createNewView completed successfully');
   } catch (error) {
     console.error('❌ Error in createNewView:', error);
@@ -2583,6 +2615,149 @@ window.addEventListener("DOMContentLoaded", async () => {
 // Make functions global so they can be called from HTML
 window.closeView = closeView;
 window.toggleRowContent = toggleRowContent;
+window.reloadPopupData = reloadPopupData;
+
+// Function to get file modification time
+async function getFileModTime(filePath) {
+  if (!window.__TAURI__) {
+    // For development mode, check if file exists using fetch
+    try {
+      const response = await fetch(filePath, { method: 'HEAD' });
+      if (response.ok) {
+        // File exists, return current time to force reload in dev mode
+        return new Date().getTime();
+      } else {
+        // File doesn't exist
+        return null;
+      }
+    } catch (error) {
+      // File doesn't exist or can't be accessed
+      return null;
+    }
+  }
+  
+  try {
+    const { invoke } = window.__TAURI__.core;
+    const metadata = await invoke('get_file_metadata', { path: filePath });
+    return metadata.modified_time;
+  } catch (error) {
+    // File doesn't exist or can't be accessed
+    console.warn(`Could not get modification time for ${filePath}:`, error.message);
+    return null;
+  }
+}
+
+// Function to check if any YAML files have changed
+async function checkYamlFilesChanged() {
+  const mainCommands = [
+    'findall', 'install', 'get', 'run', 'zip', 'unzip', 'ci', 'create', 'register', 'update'
+  ];
+  
+  let hasChanges = false;
+  const changedFiles = [];
+  const deletedFiles = [];
+  const currentFiles = new Set();
+  
+  // Check each expected file
+  for (const commandName of mainCommands) {
+    let filePath;
+    
+    // Construct file path based on environment
+    if (window.__TAURI__) {
+      filePath = `data/command/${commandName}.yml`;
+    } else {
+      filePath = `./data/command/${commandName}.yml`;
+    }
+    
+    const currentModTime = await getFileModTime(filePath);
+    const lastKnownModTime = yamlFileTimestamps[filePath];
+    
+    if (currentModTime !== null) {
+      // File exists
+      currentFiles.add(filePath);
+      
+      if (!lastKnownModTime || currentModTime > lastKnownModTime) {
+        hasChanges = true;
+        changedFiles.push(commandName);
+        yamlFileTimestamps[filePath] = currentModTime;
+      }
+    } else if (lastKnownModTime) {
+      // File was known but now doesn't exist - it was deleted
+      hasChanges = true;
+      deletedFiles.push(commandName);
+      delete yamlFileTimestamps[filePath]; // Remove from cache
+    }
+  }
+  
+  // Check for any files that were previously tracked but no longer exist
+  const trackedFiles = Object.keys(yamlFileTimestamps);
+  for (const trackedPath of trackedFiles) {
+    if (!currentFiles.has(trackedPath)) {
+      // This file was tracked before but is not in our current expected files
+      const fileName = trackedPath.split('/').pop().replace('.yml', '');
+      if (!deletedFiles.includes(fileName)) {
+        hasChanges = true;
+        deletedFiles.push(fileName);
+        delete yamlFileTimestamps[trackedPath];
+      }
+    }
+  }
+  
+  if (hasChanges) {
+    const changeLog = [];
+    if (changedFiles.length > 0) {
+      changeLog.push(`modified: ${changedFiles.join(', ')}`);
+    }
+    if (deletedFiles.length > 0) {
+      changeLog.push(`deleted: ${deletedFiles.join(', ')}`);
+    }
+    console.log(`📝 YAML file changes detected - ${changeLog.join(', ')}`);
+  }
+  
+  return { hasChanges, changedFiles, deletedFiles };
+}
+
+// Function to update popup data (for hot-updating YAML files)
+async function reloadPopupData() {
+  console.log('🔄 Updating popup data...');
+  try {
+    await loadPopupData();
+    console.log('✅ Popup data updated successfully');
+    
+    // Add confirmation to active view
+    const viewId = getActiveViewId();
+    addTerminalEntry('✅ YAML popup data updated successfully', viewId);
+  } catch (error) {
+    console.error('❌ Failed to update popup data:', error);
+    const viewId = getActiveViewId();
+    addTerminalEntry(`❌ Failed to update popup data: ${error.message}`, viewId);
+  }
+}
+
+// Function to conditionally update popup data only if files changed
+async function reloadPopupDataIfChanged() {
+  console.log('🔍 Checking if YAML files have changed...');
+  
+  const { hasChanges, changedFiles, deletedFiles } = await checkYamlFilesChanged();
+  
+  if (hasChanges) {
+    const changeTypes = [];
+    if (changedFiles.length > 0) {
+      changeTypes.push(`modified: ${changedFiles.join(', ')}`);
+    }
+    if (deletedFiles.length > 0) {
+      changeTypes.push(`deleted: ${deletedFiles.join(', ')}`);
+    }
+    
+    console.log(`🔄 Changes detected - ${changeTypes.join(', ')}, updating...`);
+    await loadPopupData();
+    console.log('✅ Popup data updated due to file changes');
+    return true;
+  } else {
+    console.log('✅ No YAML file changes detected, skipping update');
+    return false;
+  }
+}
 
 // Helper function to add expandable entry with command output
 function addExpandableCommandOutput(command, output, exitCode, viewId) {
