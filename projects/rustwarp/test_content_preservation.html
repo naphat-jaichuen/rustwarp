@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Content Preservation Test</title>
+    <style>
+        .test-container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .test-content {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .search-input {
+            width: 300px;
+            padding: 5px;
+            margin: 10px 0;
+        }
+        .search-results {
+            margin: 5px 0;
+            font-weight: bold;
+        }
+        .search-highlight {
+            background-color: yellow;
+            padding: 1px;
+        }
+        .search-highlight.current-match {
+            background-color: orange;
+            padding: 1px;
+        }
+        .status {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .success {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Content Preservation Test</h1>
+        <p>This test verifies that content at the end of files is preserved during search operations.</p>
+        
+        <div>
+            <input type="text" id="test-search" class="search-input" placeholder="Type 'END' to test end content preservation">
+            <span id="test-search-results" class="search-results"></span>
+            <button onclick="runContentIntegrityTest()">Run Integrity Test</button>
+            <button onclick="clearSearch()">Clear Search</button>
+        </div>
+        
+        <div id="status" class="status">Ready for testing...</div>
+        
+        <div class="test-content" id="test-content">
+            <pre><code data-original-content="Line 1: This is the beginning of the content
+Line 2: Some middle content with keywords
+Line 3: More content in the middle
+Line 4: This line contains the word function
+Line 5: Another line with variable declarations
+Line 6: More function definitions here
+Line 7: Some intermediate content
+Line 8: Testing search functionality
+Line 9: Additional content for testing
+Line 10: More lines to fill content
+Line 11: This line has keywords too
+Line 12: Function calls and variables
+Line 13: More test content here
+Line 14: Additional lines for testing
+Line 15: Some more content in between
+Line 16: More function and variable content
+Line 17: Testing intermediate content
+Line 18: Additional test lines here
+Line 19: More content for comprehensive testing
+Line 20: This is near the END of the content
+Line 21: VERY IMPORTANT END CONTENT HERE
+Line 22: THIS IS THE FINAL LINE - DO NOT LOSE THIS!">Line 1: This is the beginning of the content
+Line 2: Some middle content with keywords
+Line 3: More content in the middle
+Line 4: This line contains the word function
+Line 5: Another line with variable declarations
+Line 6: More function definitions here
+Line 7: Some intermediate content
+Line 8: Testing search functionality
+Line 9: Additional content for testing
+Line 10: More lines to fill content
+Line 11: This line has keywords too
+Line 12: Function calls and variables
+Line 13: More test content here
+Line 14: Additional lines for testing
+Line 15: Some more content in between
+Line 16: More function and variable content
+Line 17: Testing intermediate content
+Line 18: Additional test lines here
+Line 19: More content for comprehensive testing
+Line 20: This is near the END of the content
+Line 21: VERY IMPORTANT END CONTENT HERE
+Line 22: THIS IS THE FINAL LINE - DO NOT LOSE THIS!</code></pre>
+        </div>
+        
+        <div>
+            <h3>Test Instructions:</h3>
+            <ol>
+                <li><strong>Test 1:</strong> Type "function" and verify all content is still visible</li>
+                <li><strong>Test 2:</strong> Type "END" and check that Line 21 and Line 22 are still visible</li>
+                <li><strong>Test 3:</strong> Clear search and verify Line 22 is still there</li>
+                <li><strong>Test 4:</strong> Click "Run Integrity Test" to automatically verify content preservation</li>
+            </ol>
+            <p><strong>Critical Test:</strong> After any search, scroll down and verify that Line 22 ("THIS IS THE FINAL LINE - DO NOT LOSE THIS!") is still visible.</p>
+        </div>
+    </div>
+
+    <script>
+        // Simplified search implementation based on the fixed version
+        let searchState = {};
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        function setupFileSearch(searchId, contentId) {
+            const searchInput = document.getElementById(searchId);
+            const contentElement = document.getElementById(contentId);
+            
+            if (!searchInput || !contentElement) return;
+            
+            const codeElement = contentElement.querySelector('code');
+            let originalContent = null;
+            
+            if (codeElement) {
+                originalContent = codeElement.dataset.originalContent || codeElement.textContent || '';
+                console.log(`🔍 Setting up search for ${searchId}, content length: ${originalContent.length}`);
+            }
+            
+            // Initialize with backup content
+            searchState[searchId] = {
+                currentMatch: 0,
+                totalMatches: 0,
+                originalContent: originalContent,
+                backupContent: originalContent, // Additional backup
+                contentElement: contentElement,
+                isLargeFile: originalContent ? originalContent.length > 1000 : false
+            };
+            
+            searchInput.addEventListener('input', (e) => {
+                performFileSearch(searchId, contentId, e.target.value);
+            });
+        }
+
+        function performFileSearch(searchId, contentId, query) {
+            const contentElement = document.getElementById(contentId);
+            const resultsElement = document.getElementById(`${searchId}-results`);
+            const codeElement = contentElement.querySelector('code');
+            
+            if (!contentElement || !codeElement) return;
+            
+            const originalContent = searchState[searchId].originalContent;
+            if (!originalContent) return;
+            
+            if (!query.trim()) {
+                // Clear search - restore original content with integrity check
+                const contentToRestore = originalContent || searchState[searchId].backupContent;
+                if (contentToRestore) {
+                    codeElement.innerHTML = escapeHtml(contentToRestore);
+                    updateStatus(`Restored content: ${contentToRestore.length} characters`, 'success');
+                }
+                resultsElement.textContent = '';
+                return;
+            }
+            
+            // Perform search
+            const regex = new RegExp(escapeRegExp(query), 'gi');
+            const matches = [...originalContent.matchAll(regex)];
+            
+            if (matches.length === 0) {
+                resultsElement.textContent = 'No matches';
+                const contentToRestore = originalContent || searchState[searchId].backupContent;
+                if (contentToRestore) {
+                    codeElement.innerHTML = escapeHtml(contentToRestore);
+                }
+            } else {
+                resultsElement.textContent = `1/${matches.length}`;
+                highlightMatches(matches, originalContent, codeElement);
+            }
+        }
+
+        function highlightMatches(matches, originalContent, codeElement) {
+            console.log(`🔍 Highlighting ${matches.length} matches in ${originalContent.length} characters`);
+            
+            try {
+                let highlightedContent = originalContent;
+                
+                // Sort matches by index in descending order
+                const sortedMatches = [...matches].sort((a, b) => b.index - a.index);
+                
+                // Process all matches
+                sortedMatches.forEach((match, index) => {
+                    const start = match.index;
+                    const end = start + match[0].length;
+                    
+                    // Validate indices
+                    if (start < 0 || end > highlightedContent.length || start >= end) {
+                        console.warn(`🔍 Invalid match indices: start=${start}, end=${end}`);
+                        return;
+                    }
+                    
+                    const isCurrentMatch = index === sortedMatches.length - 1; // Last processed = first match
+                    const highlightClass = isCurrentMatch ? 'search-highlight current-match' : 'search-highlight';
+                    const matchText = highlightedContent.slice(start, end);
+                    const replacement = `<span class="${highlightClass}">${escapeHtml(matchText)}</span>`;
+                    
+                    // Safely replace content
+                    const before = highlightedContent.slice(0, start);
+                    const after = highlightedContent.slice(end);
+                    highlightedContent = before + replacement + after;
+                });
+                
+                console.log(`🔍 Final content length: ${highlightedContent.length}, original: ${originalContent.length}`);
+                
+                // Update DOM
+                codeElement.innerHTML = highlightedContent;
+                
+                // Verify content integrity
+                const finalTextLength = codeElement.textContent.length;
+                if (Math.abs(finalTextLength - originalContent.length) > 10) {
+                    updateStatus(`❌ Content length mismatch! Original: ${originalContent.length}, Final: ${finalTextLength}`, 'error');
+                    // Fallback
+                    codeElement.innerHTML = escapeHtml(originalContent);
+                } else {
+                    updateStatus(`✅ Content preserved successfully. Length: ${finalTextLength}`, 'success');
+                }
+                
+            } catch (error) {
+                console.error('🔍 Error in highlighting:', error);
+                updateStatus(`❌ Error in highlighting: ${error.message}`, 'error');
+                codeElement.innerHTML = escapeHtml(originalContent);
+            }
+        }
+
+        function clearSearch() {
+            const searchInput = document.getElementById('test-search');
+            if (searchInput) {
+                searchInput.value = '';
+                performFileSearch('test-search', 'test-content', '');
+            }
+        }
+
+        function updateStatus(message, type = '') {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+        }
+
+        function runContentIntegrityTest() {
+            updateStatus('Running content integrity test...', '');
+            
+            const originalContent = searchState['test-search'].originalContent;
+            const contentElement = document.getElementById('test-content');
+            const codeElement = contentElement.querySelector('code');
+            
+            // Test 1: Check original content
+            const currentText = codeElement.textContent;
+            const hasLastLine = currentText.includes('THIS IS THE FINAL LINE - DO NOT LOSE THIS!');
+            
+            if (!hasLastLine) {
+                updateStatus('❌ FAILED: Final line is missing!', 'error');
+                return;
+            }
+            
+            // Test 2: Perform search and check integrity
+            performFileSearch('test-search', 'test-content', 'function');
+            
+            setTimeout(() => {
+                const afterSearchText = codeElement.textContent;
+                const stillHasLastLine = afterSearchText.includes('THIS IS THE FINAL LINE - DO NOT LOSE THIS!');
+                
+                if (!stillHasLastLine) {
+                    updateStatus('❌ FAILED: Final line lost after search!', 'error');
+                } else {
+                    const lengthDiff = Math.abs(afterSearchText.length - originalContent.length);
+                    if (lengthDiff <= 10) {
+                        updateStatus('✅ PASSED: Content integrity maintained!', 'success');
+                    } else {
+                        updateStatus(`⚠️ WARNING: Content length changed by ${lengthDiff} characters`, 'error');
+                    }
+                }
+                
+                // Clear search
+                setTimeout(() => {
+                    clearSearch();
+                    setTimeout(() => {
+                        const finalText = codeElement.textContent;
+                        const finalHasLastLine = finalText.includes('THIS IS THE FINAL LINE - DO NOT LOSE THIS!');
+                        if (finalHasLastLine) {
+                            updateStatus('✅ COMPLETE: All tests passed! Content preserved.', 'success');
+                        } else {
+                            updateStatus('❌ FAILED: Content lost after clearing search!', 'error');
+                        }
+                    }, 100);
+                }, 1000);
+            }, 100);
+        }
+
+        // Initialize the test
+        document.addEventListener('DOMContentLoaded', function() {
+            setupFileSearch('test-search', 'test-content');
+            updateStatus('Test initialized. Ready to test content preservation.', 'success');
+        });
+    </script>
+</body>
+</html>

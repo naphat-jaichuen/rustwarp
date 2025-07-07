@@ -1,0 +1,21 @@
+これはShift-JISエンコーディングのテストファイルです。
+
+日本語テキスト：
+こんにちは世界！
+プログラミングは楽しいです。
+検索機能のテストをしています。
+
+English text mixed with Japanese:
+Hello World! こんにちは世界！
+Testing search functionality with mixed content.
+
+テスト検索キーワード：
+- 関数 (function)
+- 変数 (variable) 
+- ファイル (file)
+- テスト (test)
+- 検索 (search)
+- 内容 (content)
+
+このファイルの最後の行です。
+END OF FILE - ファイルの終わり

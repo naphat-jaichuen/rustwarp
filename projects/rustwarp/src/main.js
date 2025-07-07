@@ -1735,11 +1735,12 @@ function setupFileSearch(searchId, contentId) {
     console.warn(`🔍 No code element found for ${searchId}`);
   }
   
-  // Initialize search state with pre-cached content
+  // Initialize search state with pre-cached content and backup
   searchState[searchId] = {
     currentMatch: 0,
     totalMatches: 0,
     originalContent: originalContent,
+    backupContent: originalContent, // Additional backup
     contentElement: contentElement,
     searchTimeout: null,
     isLargeFile: originalContent ? originalContent.length > 50000 : false // Files larger than 50KB
@@ -1848,8 +1849,15 @@ function performFileSearch(searchId, contentId, query) {
   console.log(`🔍 Searching "${query}" in ${originalContent.length} characters for ${searchId}`);
   
   if (!query.trim()) {
-    // Clear search - restore original content
-    codeElement.innerHTML = escapeHtml(originalContent);
+    // Clear search - restore original content with integrity check
+    const contentToRestore = originalContent || searchState[searchId].backupContent;
+    if (contentToRestore) {
+      codeElement.innerHTML = escapeHtml(contentToRestore);
+      console.log(`🧹 Restored content: ${contentToRestore.length} characters`);
+    } else {
+      console.error('🔍 No content to restore!');
+    }
+    
     resultsElement.textContent = '';
     searchState[searchId].currentMatch = 0;
     searchState[searchId].totalMatches = 0;
@@ -1896,7 +1904,12 @@ function performActualSearch(searchId, contentId, query, originalContent, codeEl
     if (matches.length === 0) {
       resultsElement.textContent = 'No matches';
       resultsElement.className = 'search-results no-matches';
-      codeElement.innerHTML = escapeHtml(originalContent);
+      // Restore original content safely
+      const contentToRestore = originalContent || searchState[searchId].backupContent;
+      if (contentToRestore) {
+        codeElement.innerHTML = escapeHtml(contentToRestore);
+        console.log(`🔍 No matches - restored ${contentToRestore.length} characters`);
+      }
     } else {
       resultsElement.textContent = `${searchState[searchId].currentMatch}/${matches.length}`;
       resultsElement.className = 'search-results has-matches';
@@ -1941,43 +1954,65 @@ function performActualSearch(searchId, contentId, query, originalContent, codeEl
 
 // Optimized highlighting function
 function highlightMatches(matches, originalContent, codeElement) {
-  // Process matches in chunks to prevent UI blocking
-  const chunkSize = 100;
-  let highlightedContent = originalContent;
+  console.log(`🔍 Highlighting ${matches.length} matches in ${originalContent.length} characters`);
   
-  // Sort matches by index in descending order to process from end to beginning
-  const sortedMatches = [...matches].sort((a, b) => b.index - a.index);
-  
-  // Process matches in chunks using setTimeout to prevent blocking
-  function processChunk(startIndex) {
-    const endIndex = Math.min(startIndex + chunkSize, sortedMatches.length);
+  // For better performance and to avoid content loss, process all matches at once
+  // but use a more efficient algorithm
+  try {
+    let highlightedContent = originalContent;
     
-    for (let i = startIndex; i < endIndex; i++) {
-      const match = sortedMatches[i];
+    // Sort matches by index in descending order to process from end to beginning
+    // This prevents index shifting issues
+    const sortedMatches = [...matches].sort((a, b) => b.index - a.index);
+    
+    console.log(`🔍 Processing ${sortedMatches.length} sorted matches`);
+    
+    // Process all matches in a single pass to avoid content corruption
+    sortedMatches.forEach((match, index) => {
       const start = match.index;
       const end = start + match[0].length;
       const originalIndex = matches.indexOf(match);
       const isCurrentMatch = originalIndex === 0;
       
-      const highlightClass = isCurrentMatch ? 'search-highlight current-match' : 'search-highlight';
-      const replacement = `<span class="${highlightClass}" data-match-index="${originalIndex}">${escapeHtml(match[0])}</span>`;
+      // Validate indices to prevent content corruption
+      if (start < 0 || end > highlightedContent.length || start >= end) {
+        console.warn(`🔍 Invalid match indices: start=${start}, end=${end}, content length=${highlightedContent.length}`);
+        return;
+      }
       
-      highlightedContent = highlightedContent.slice(0, start) + replacement + highlightedContent.slice(end);
+      const highlightClass = isCurrentMatch ? 'search-highlight current-match' : 'search-highlight';
+      const matchText = highlightedContent.slice(start, end);
+      const replacement = `<span class="${highlightClass}" data-match-index="${originalIndex}">${escapeHtml(matchText)}</span>`;
+      
+      // Safely replace the content
+      const before = highlightedContent.slice(0, start);
+      const after = highlightedContent.slice(end);
+      highlightedContent = before + replacement + after;
+      
+      // Debug logging for first few matches
+      if (index < 3) {
+        console.log(`🔍 Match ${index}: "${matchText}" at ${start}-${end}, content length now: ${highlightedContent.length}`);
+      }
+    });
+    
+    console.log(`🔍 Final highlighted content length: ${highlightedContent.length}, original: ${originalContent.length}`);
+    
+    // Update DOM with the complete highlighted content
+    codeElement.innerHTML = highlightedContent;
+    
+    // Verify content integrity
+    const finalTextLength = codeElement.textContent.length;
+    if (Math.abs(finalTextLength - originalContent.length) > 100) {
+      console.warn(`🔍 Content length mismatch! Original: ${originalContent.length}, Final: ${finalTextLength}`);
+      // Fallback: restore original content and try simple highlighting
+      codeElement.innerHTML = escapeHtml(originalContent);
+      console.log(`🔍 Restored original content due to length mismatch`);
     }
     
-    // Update DOM with current progress
-    if (endIndex < sortedMatches.length) {
-      // Continue processing in next frame
-      setTimeout(() => processChunk(endIndex), 0);
-    } else {
-      // Finished processing all matches
-      codeElement.innerHTML = highlightedContent;
-    }
-  }
-  
-  // Start processing
-  if (sortedMatches.length > 0) {
-    processChunk(0);
+  } catch (error) {
+    console.error('🔍 Error in highlighting:', error);
+    // Fallback: restore original content
+    codeElement.innerHTML = escapeHtml(originalContent);
   }
 }
 
@@ -2125,16 +2160,77 @@ function readFileContent(file, viewId) {
     return;
   }
   
-  const reader = new FileReader();
-  
-  reader.onload = function(e) {
-    const content = e.target.result;
+  // Function to try reading with different encodings
+  function tryReadWithEncoding(file, encoding, callback) {
+    const reader = new FileReader();
     
-    // Check if content contains binary data
-    if (content.includes('\0')) {
-      addTerminalEntry(`📄 ${file.name} (${fileSize}) - Binary content detected, not displayed`, viewId);
-      return;
+    reader.onload = function(e) {
+      const content = e.target.result;
+      
+      // Check if content contains binary data or encoding issues
+      if (content.includes('\0')) {
+        callback(null, 'Binary content detected');
+        return;
+      }
+      
+      // Check for common Shift-JIS encoding issues (question marks, replacement characters)
+      const hasEncodingIssues = content.includes('\uFFFD') || 
+        (encoding === 'UTF-8' && /[\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\uFF00-\uFFEF]/.test(content) === false && 
+         file.name.match(/\.(txt|csv|tsv|log)$/i));
+      
+      if (hasEncodingIssues && encoding === 'UTF-8') {
+        console.log(`🔄 UTF-8 encoding issues detected for ${file.name}, trying Shift-JIS`);
+        callback(null, 'Encoding issues detected');
+        return;
+      }
+      
+      callback(content, null);
+    };
+    
+    reader.onerror = function() {
+      callback(null, `Error reading file with ${encoding} encoding`);
+    };
+    
+    if (encoding === 'Shift-JIS') {
+      reader.readAsText(file, 'shift_jis');
+    } else {
+      reader.readAsText(file, encoding);
     }
+  }
+  
+  // Try UTF-8 first, then Shift-JIS if issues detected
+  tryReadWithEncoding(file, 'UTF-8', (content, error) => {
+    if (content && !error) {
+      processFileContent(content, file, viewId, fileSize);
+    } else {
+      console.log(`📝 Trying Shift-JIS encoding for ${file.name}`);
+      tryReadWithEncoding(file, 'Shift-JIS', (shiftJisContent, shiftJisError) => {
+        if (shiftJisContent && !shiftJisError) {
+          console.log(`✅ Successfully read ${file.name} with Shift-JIS encoding`);
+          processFileContent(shiftJisContent, file, viewId, fileSize);
+        } else {
+          // Try one more time with default encoding
+          const fallbackReader = new FileReader();
+          fallbackReader.onload = function(e) {
+            const fallbackContent = e.target.result;
+            if (fallbackContent && !fallbackContent.includes('\0')) {
+              console.log(`⚠️ Using fallback encoding for ${file.name}`);
+              processFileContent(fallbackContent, file, viewId, fileSize);
+            } else {
+              addTerminalEntry(`❌ Could not read ${file.name} with any encoding`, viewId);
+            }
+          };
+          fallbackReader.onerror = function() {
+            addTerminalEntry(`❌ Error reading file: ${file.name}`, viewId);
+          };
+          fallbackReader.readAsText(file);
+        }
+      });
+    }
+  });
+  
+  // Helper function to process file content once successfully read
+  function processFileContent(content, file, viewId, fileSize) {
     
     const lines = content.split('\n');
     const lineCount = lines.length;
@@ -2157,13 +2253,7 @@ function readFileContent(file, viewId) {
       `${langPreset.icon} ${file.name} (${fileSize}, ${lineCount} lines) - ${langPreset.name}` :
       `📄 ${file.name} (${fileSize}, ${lineCount} lines)`;
     addTerminalEntry(fileInfo, viewId, false, bufferContent);
-  };
-  
-  reader.onerror = function() {
-    addTerminalEntry(`❌ Error reading file: ${file.name}`, viewId);
-  };
-  
-  reader.readAsText(file);
+  }
 }
 
 // Function to set current folder
@@ -2391,40 +2481,87 @@ async function readTauriFileContent(filePath, viewId) {
   }
   
   try {
-    const { readTextFile } = window.__TAURI__.fs;
-    const content = await readTextFile(filePath);
+    // Try our custom Shift-JIS aware function first
+    const { invoke } = window.__TAURI__.core;
     
-    // Calculate file size in bytes (approximate)
-    const fileSize = new Blob([content]).size;
-    const formattedSize = formatFileSize(fileSize);
-    
-    // Check if content contains binary data
-    if (content.includes('\0')) {
-      addTerminalEntry(`📄 ${fileName} (${formattedSize}) - Binary content detected, not displayed`, viewId);
-      return;
+    try {
+      const fileContent = await invoke('read_text_file_with_encoding', { path: filePath });
+      
+      const content = fileContent.content;
+      const encoding = fileContent.encoding;
+      const fileSize = fileContent.size;
+      const formattedSize = formatFileSize(fileSize);
+      
+      console.log(`✅ Successfully read ${fileName} with ${encoding} encoding`);
+      
+      // Check if content contains binary data
+      if (content.includes('\0')) {
+        addTerminalEntry(`📄 ${fileName} (${formattedSize}) - Binary content detected, not displayed`, viewId);
+        return;
+      }
+      
+      const lines = content.split('\n');
+      const lineCount = lines.length;
+      
+      // Create expandable buffer content
+      const bufferContent = {
+        type: 'buffer',
+        title: `File Content: ${fileName} (${encoding})`,
+        fileName: fileName,
+        lines: lineCount,
+        size: formattedSize,
+        content: content
+      };
+      
+      // Get language preset for enhanced file display
+      const langPreset = getLanguagePreset(fileName);
+      
+      // Display file info with encoding information
+      const encodingInfo = encoding !== 'UTF-8' ? ` [${encoding}]` : '';
+      const fileInfo = langPreset ? 
+        `${langPreset.icon} ${fileName} (${formattedSize}, ${lineCount} lines)${encodingInfo} - ${langPreset.name}` :
+        `📄 ${fileName} (${formattedSize}, ${lineCount} lines)${encodingInfo}`;
+      addTerminalEntry(fileInfo, viewId, false, bufferContent);
+      
+    } catch (encodingError) {
+      console.warn(`⚠️ Custom encoding reader failed for ${fileName}, falling back to standard:`, encodingError);
+      
+      // Fallback to standard Tauri readTextFile
+      const { readTextFile } = window.__TAURI__.fs;
+      const content = await readTextFile(filePath);
+      
+      // Calculate file size in bytes (approximate)
+      const fileSize = new Blob([content]).size;
+      const formattedSize = formatFileSize(fileSize);
+      
+      // Check if content contains binary data
+      if (content.includes('\0')) {
+        addTerminalEntry(`📄 ${fileName} (${formattedSize}) - Binary content detected, not displayed`, viewId);
+        return;
+      }
+      
+      const lines = content.split('\n');
+      const lineCount = lines.length;
+      
+      // Create expandable buffer content
+      const bufferContent = {
+        type: 'buffer',
+        title: `File Content: ${fileName}`,
+        fileName: fileName,
+        lines: lineCount,
+        size: formattedSize,
+        content: content
+      };
+      
+      // Get language preset for enhanced file display
+      const langPreset = getLanguagePreset(fileName);
+      
+      // Display file info in first row with expandable content and language decoration
+      const fileInfo = langPreset ? 
+        `${langPreset.icon} ${fileName} (${formattedSize}, ${lineCount} lines) - ${langPreset.name}` :
+        `📄 ${fileName} (${formattedSize}, ${lineCount} lines)`;
+      addTerminalEntry(fileInfo, viewId, false, bufferContent);
     }
-    
-    const lines = content.split('\n');
-    const lineCount = lines.length;
-    
-    // Create expandable buffer content
-    const bufferContent = {
-      type: 'buffer',
-      title: `File Content: ${fileName}`,
-      fileName: fileName,
-      lines: lineCount,
-      size: formattedSize,
-      content: content
-    };
-    
-    // Get language preset for enhanced file display
-    const langPreset = getLanguagePreset(fileName);
-    
-    // Display file info in first row with expandable content and language decoration
-    const fileInfo = langPreset ? 
-      `${langPreset.icon} ${fileName} (${formattedSize}, ${lineCount} lines) - ${langPreset.name}` :
-      `📄 ${fileName} (${formattedSize}, ${lineCount} lines)`;
-    addTerminalEntry(fileInfo, viewId, false, bufferContent);
   } catch (error) {
     addTerminalEntry(`❌ Error reading file ${fileName}: ${error.message}`, viewId);
   }

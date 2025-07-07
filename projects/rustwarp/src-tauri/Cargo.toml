@@ -25,6 +25,7 @@ tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.21"
+encoding_rs = "0.8"
 
 # Main application binary
 [[bin]]
