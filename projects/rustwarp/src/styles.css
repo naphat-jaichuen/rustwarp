@@ -476,6 +476,18 @@
   color: rgba(255, 255, 255, 0.5);
 }
 
+/* Disabled search input styles */
+.search-input:disabled {
+  background: rgba(100, 100, 100, 0.1);
+  border-color: rgba(100, 100, 100, 0.3);
+  color: rgba(255, 255, 255, 0.4);
+  cursor: not-allowed;
+}
+
+.search-input:disabled::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
 /* Keyboard shortcut hints */
 .search-container::after {
   content: 'Enter: Next • Shift+Enter: Previous • Esc: Clear • Ctrl+G: Find Next';
@@ -519,6 +531,17 @@
 .search-clear:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #ff6b6b;
+}
+
+.search-clear:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.search-clear:disabled:hover {
+  background: none;
+  color: rgba(255, 255, 255, 0.3);
 }
 
 .search-results {

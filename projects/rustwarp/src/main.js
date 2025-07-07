@@ -9,7 +9,8 @@ const CONFIG_FILE = 'config.json';
 
 // Configuration object
 let config = {
-  fontSize: 13
+  fontSize: 13,
+  searchDisabled: false  // Flag to temporarily disable search functionality
 };
 
 // Popup state
@@ -100,12 +101,12 @@ function addTerminalEntry(text, viewId, isFileContent = false, expandableContent
             ${largeFileWarning}
             <div class="buffer-search-row">
               <div class="search-container">
-                <input type="text" id="${searchId}" class="search-input" placeholder="${isLargeFile ? 'Search in large file (optimized)...' : 'Search in file...'}" />
-                <button class="search-clear" onclick="clearFileSearch('${searchId}', '${contentId}')" title="Clear search">✕</button>
+                <input type="text" id="${searchId}" class="search-input" placeholder="${config.searchDisabled ? 'Search temporarily disabled' : (isLargeFile ? 'Search in large file (optimized)...' : 'Search in file...')}" ${config.searchDisabled ? 'disabled readonly' : ''} />
+                <button class="search-clear" onclick="clearFileSearch('${searchId}', '${contentId}')" title="Clear search" ${config.searchDisabled ? 'disabled' : ''}>✕</button>
                 <span class="search-results" id="${searchId}-results"></span>
                 <div class="search-nav">
-                  <button class="search-prev" onclick="navigateSearch('${searchId}', '${contentId}', -1)" title="Previous match">↑</button>
-                  <button class="search-next" onclick="navigateSearch('${searchId}', '${contentId}', 1)" title="Next match">↓</button>
+                  <button class="search-prev" onclick="navigateSearch('${searchId}', '${contentId}', -1)" title="Previous match" ${config.searchDisabled ? 'disabled' : ''}>↑</button>
+                  <button class="search-next" onclick="navigateSearch('${searchId}', '${contentId}', 1)" title="Next match" ${config.searchDisabled ? 'disabled' : ''}>↓</button>
                 </div>
               </div>
             </div>
@@ -136,8 +137,10 @@ function addTerminalEntry(text, viewId, isFileContent = false, expandableContent
           });
         }
         
-        // Setup search functionality
-        setupFileSearch(searchId, contentId);
+        // Setup search functionality only if not disabled
+        if (!config.searchDisabled) {
+          setupFileSearch(searchId, contentId);
+        }
       }, isLargeFile ? 100 : 10); // Longer delay for large files
     } else if (expandableContent.type === 'output') {
       expandableDiv.innerHTML = `
@@ -329,6 +332,18 @@ function handleEnterKey(event) {
       if (text.toLowerCase() === 'update') {
         addTerminalEntry(text, viewId);
         reloadPopupData();
+      } else if (text.toLowerCase() === 'disable search' || text.toLowerCase() === 'search off') {
+        addTerminalEntry(text, viewId);
+        const disabled = toggleSearchFunctionality(true);
+        addTerminalEntry(`🚫 Search functionality disabled. Use 'enable search' to re-enable.`, viewId);
+      } else if (text.toLowerCase() === 'enable search' || text.toLowerCase() === 'search on') {
+        addTerminalEntry(text, viewId);
+        const disabled = toggleSearchFunctionality(false);
+        addTerminalEntry(`✅ Search functionality enabled.`, viewId);
+      } else if (text.toLowerCase() === 'toggle search') {
+        addTerminalEntry(text, viewId);
+        const disabled = toggleSearchFunctionality();
+        addTerminalEntry(`🔍 Search functionality ${disabled ? 'disabled' : 'enabled'}.`, viewId);
       } else {
         addTerminalEntry(text, viewId);
       }
@@ -1694,6 +1709,54 @@ function isTextFile(fileName) {
 // Search functionality for file content
 let searchState = {}; // Global search state
 
+// Function to toggle search functionality globally
+function toggleSearchFunctionality(disabled = null) {
+  // If disabled parameter is provided, use it; otherwise toggle current state
+  config.searchDisabled = disabled !== null ? disabled : !config.searchDisabled;
+  
+  const status = config.searchDisabled ? '🚫 DISABLED' : '✅ ENABLED';
+  console.log(`🔍 Search functionality ${status}`);
+  
+  // Update existing search inputs
+  document.querySelectorAll('.search-input').forEach(input => {
+    if (config.searchDisabled) {
+      input.disabled = true;
+      input.readOnly = true;
+      input.placeholder = 'Search temporarily disabled';
+      input.value = '';
+    } else {
+      input.disabled = false;
+      input.readOnly = false;
+      input.placeholder = input.placeholder.includes('large file') ? 
+        'Search in large file (optimized)...' : 'Search in file...';
+    }
+  });
+  
+  // Update search buttons
+  document.querySelectorAll('.search-clear, .search-prev, .search-next').forEach(button => {
+    button.disabled = config.searchDisabled;
+  });
+  
+  // Clear any active searches if disabling
+  if (config.searchDisabled) {
+    Object.keys(searchState).forEach(searchId => {
+      cleanupSearchState(searchId);
+    });
+  }
+  
+  return config.searchDisabled;
+}
+
+// Make the toggle function globally accessible
+window.toggleSearchFunctionality = toggleSearchFunctionality;
+
+// Log instructions for search toggle functionality
+console.log(`🔍 Search Control Instructions:
+  • toggleSearchFunctionality(true)  - Disable search
+  • toggleSearchFunctionality(false) - Enable search
+  • toggleSearchFunctionality()      - Toggle current state
+  • Current state: ${config.searchDisabled ? '🚫 DISABLED' : '✅ ENABLED'}`);
+
 // Function to clean up search state for a specific search instance
 function cleanupSearchState(searchId) {
   if (searchState[searchId]) {
@@ -1718,6 +1781,12 @@ function cleanupOrphanedSearchStates() {
 }
 
 function setupFileSearch(searchId, contentId) {
+  // Skip setup if search is disabled
+  if (config.searchDisabled) {
+    console.log(`🚫 Search setup skipped for ${searchId} - search is disabled`);
+    return;
+  }
+  
   const searchInput = document.getElementById(searchId);
   const contentElement = document.getElementById(contentId);
   
